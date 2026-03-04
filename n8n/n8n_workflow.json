@@ -1,0 +1,205 @@
+{
+  "name": "Smart Helpdesk - MCP Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start",
+      "name": "Slack Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "1",
+          "name": "Slack Bot"
+        }
+      },
+      "webhookId": "helpdesk-webhook"
+    },
+    {
+      "parameters": {
+        "server": "wss://<account>.snowflakecomputing.com/mcp-server/HELPDESK_DB/APP/HELPDESK_MCP_SERVER",
+        "authentication": "oauth",
+        "oauthCredentials": {
+          "clientId": "{{$env.SNOWFLAKE_MCP_CLIENT_ID}}",
+          "clientSecret": "{{$env.SNOWFLAKE_MCP_CLIENT_SECRET}}",
+          "tokenUrl": "https://<account>.snowflakecomputing.com/oauth/token-request"
+        },
+        "toolName": "helpdesk-agent",
+        "parameters": {
+          "prompt": "={{ $json.event.text }}"
+        }
+      },
+      "id": "mcp-agent",
+      "name": "MCP - Cortex Agent",
+      "type": "@n8n/n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentResponse = $input.first().json;\n\ntry {\n  // JSONレスポンスをパース\n  const parsed = JSON.parse(agentResponse.result || agentResponse.content);\n  \n  return [{\n    json: {\n      reporter_name: parsed.reporter_name || null,\n      location: parsed.location || null,\n      issue_type: parsed.issue_type || 'OTHER',\n      urgency: parsed.urgency || 'MEDIUM',\n      summary: parsed.summary || '不明な問題',\n      details: JSON.stringify(parsed.details || []),\n      matched_asset_id: parsed.matched_asset_id || null,\n      source_message: $('Slack Trigger').first().json.event.text,\n      source_channel: 'SLACK',\n      source_message_id: $('Slack Trigger').first().json.event.ts\n    }\n  }];\n} catch (e) {\n  // パース失敗時はデフォルト値\n  return [{\n    json: {\n      reporter_name: null,\n      location: null,\n      issue_type: 'OTHER',\n      urgency: 'MEDIUM',\n      summary: $('Slack Trigger').first().json.event.text.substring(0, 100),\n      details: '[]',\n      matched_asset_id: null,\n      source_message: $('Slack Trigger').first().json.event.text,\n      source_channel: 'SLACK',\n      source_message_id: $('Slack Trigger').first().json.event.ts\n    }\n  }];\n}"
+      },
+      "id": "parse-response",
+      "name": "Parse Agent Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "server": "wss://<account>.snowflakecomputing.com/mcp-server/HELPDESK_DB/APP/HELPDESK_MCP_SERVER",
+        "authentication": "oauth",
+        "oauthCredentials": {
+          "clientId": "{{$env.SNOWFLAKE_MCP_CLIENT_ID}}",
+          "clientSecret": "{{$env.SNOWFLAKE_MCP_CLIENT_SECRET}}",
+          "tokenUrl": "https://<account>.snowflakecomputing.com/oauth/token-request"
+        },
+        "toolName": "execute-sql",
+        "parameters": {
+          "sql": "SELECT app.create_ticket('{{ $json.reporter_name }}', NULL, '{{ $json.location }}', '{{ $json.issue_type }}', '{{ $json.urgency }}', '{{ $json.summary }}', '{{ $json.details }}'::jsonb, '{{ $json.matched_asset_id }}', '{{ $json.source_channel }}', '{{ $json.source_message_id }}')"
+        }
+      },
+      "id": "mcp-create-ticket",
+      "name": "MCP - Create Ticket",
+      "type": "@n8n/n8n-nodes-mcp.mcpClientTool",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $('Slack Trigger').first().json.event.channel }}",
+        "text": "✅ チケットを登録しました\n\n📋 *チケットID:* {{ $json.result }}\n🏷️ *種別:* {{ $('Parse Agent Response').first().json.issue_type }}\n⚠️ *緊急度:* {{ $('Parse Agent Response').first().json.urgency }}\n📝 *要約:* {{ $('Parse Agent Response').first().json.summary }}\n🖥️ *端末:* {{ $('Parse Agent Response').first().json.matched_asset_id || '未特定' }}\n\n担当者をアサインし、順次対応いたします。",
+        "replyToMessage": true,
+        "messageTs": "={{ $('Slack Trigger').first().json.event.ts }}"
+      },
+      "id": "slack-reply",
+      "name": "Slack Reply",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1250, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "1",
+          "name": "Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Parse Agent Response').first().json.urgency }}",
+              "operation": "equals",
+              "value2": "HIGH"
+            }
+          ]
+        }
+      },
+      "id": "urgency-check",
+      "name": "High Urgency?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#helpdesk-urgent",
+        "text": "🚨 *高緊急度チケット発生*\n\n📋 *チケットID:* {{ $('MCP - Create Ticket').first().json.result }}\n👤 *報告者:* {{ $('Parse Agent Response').first().json.reporter_name || '不明' }}\n📍 *場所:* {{ $('Parse Agent Response').first().json.location || '不明' }}\n📝 *内容:* {{ $('Parse Agent Response').first().json.summary }}\n\n@channel 即時対応をお願いします。"
+      },
+      "id": "slack-alert",
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1500, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "1",
+          "name": "Slack Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "MCP - Cortex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP - Cortex Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Agent Response": {
+      "main": [
+        [
+          {
+            "node": "MCP - Create Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP - Create Ticket": {
+      "main": [
+        [
+          {
+            "node": "Slack Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High Urgency?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Urgency?": {
+      "main": [
+        [
+          {
+            "node": "Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "helpdesk",
+      "id": "1"
+    },
+    {
+      "name": "production",
+      "id": "2"
+    }
+  ],
+  "meta": {
+    "description": "Slack経由のヘルプデスク問い合わせをMCP Server経由でCortex Agentに渡し、構造化してPostgresにチケット登録するワークフロー"
+  }
+}

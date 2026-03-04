@@ -1,0 +1,58 @@
+spec:
+  containers:
+  - name: ticket-app
+    image: /HELPDESK_DB/SPCS/TICKET_APP_REPO/ticket-app:latest
+    env:
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: snowflake_admin
+      POSTGRES_SSL: "true"
+    secrets:
+    - snowflakeSecret: HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET
+      secretKeyRef: secret_string
+      envVarName: POSTGRES_HOST
+    - snowflakeSecret: HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET
+      secretKeyRef: password
+      envVarName: POSTGRES_PASSWORD
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 0.5
+      limits:
+        memory: 1Gi
+        cpu: 1
+    readinessProbe:
+      port: 3000
+      path: /
+
+  endpoints:
+  - name: ticket-web
+    port: 3000
+    public: true
+
+---
+
+# デプロイ手順（fsi_japan_connection / SFSEAPAC-FSI_JAPAN）:
+#
+# 0. Snowflake Secretsを事前に作成（02_snowflake_setup.sqlを参照）
+#    CREATE SECRET HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET ...
+#    CREATE SECRET HELPDESK_DB.SPCS.POSTGRES_USER_SECRET ...
+#    CREATE SECRET HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET ...
+#
+# 1. Dockerレジストリにログイン
+#    snow spcs image-registry login --connection fsi_japan_connection
+#
+# 2. ticket-app Dockerイメージをビルド・プッシュ
+#    cd smart_helpdesk/ticket-app
+#    docker build -t sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest .
+#    docker push sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest
+#
+# 3. spec.yamlをステージにアップロード
+#    snow stage copy ticket_app_spec.yaml @HELPDESK_DB.SPCS.TICKET_APP_DATA --connection fsi_japan_connection --overwrite
+#
+# 4. サービス作成
+#    CREATE SERVICE HELPDESK_DB.SPCS.TICKET_APP_SVC
+#      IN COMPUTE POOL HELPDESK_POOL
+#      FROM @HELPDESK_DB.SPCS.TICKET_APP_DATA
+#      SPECIFICATION_FILE = 'ticket_app_spec.yaml'
+#      EXTERNAL_ACCESS_INTEGRATIONS = (EXTERNAL_ACCESS_N8N_EAI);

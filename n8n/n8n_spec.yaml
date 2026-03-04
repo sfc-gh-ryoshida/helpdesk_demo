@@ -1,0 +1,75 @@
+spec:
+  containers:
+  - name: n8n
+    image: /HELPDESK_DB/SPCS/N8N_REPO/n8n:latest
+    env:
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      GENERIC_TIMEZONE: Asia/Tokyo
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: postgres
+      DB_POSTGRESDB_USER: snowflake_admin
+      DB_POSTGRESDB_SSL_ENABLED: "true"
+      DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED: "false"
+      # Slack Incoming Webhook URL（n8n → Slack返信用）
+      # 実際のURLに置き換えてください
+      SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/TXXXXX/BXXXXX/XXXXXXXXXXXXXXXX"
+      # Snowflakeアカウント（Cortex Agent呼び出し用）
+      SNOWFLAKE_ACCOUNT: "sfseapac-fsi_japan"
+    secrets:
+    - snowflakeSecret: HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET
+      secretKeyRef: secret_string
+      envVarName: DB_POSTGRESDB_HOST
+    - snowflakeSecret: HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET
+      secretKeyRef: password
+      envVarName: DB_POSTGRESDB_PASSWORD
+    - snowflakeSecret: HELPDESK_DB.SPCS.N8N_ENCRYPTION_SECRET
+      secretKeyRef: secret_string
+      envVarName: N8N_ENCRYPTION_KEY
+    - snowflakeSecret: HELPDESK_DB.SPCS.N8N_JWT_SECRET
+      secretKeyRef: secret_string
+      envVarName: N8N_USER_MANAGEMENT_JWT_SECRET
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 0.5
+      limits:
+        memory: 2Gi
+        cpu: 1
+    readinessProbe:
+      port: 5678
+      path: /healthz
+
+  endpoints:
+  - name: n8n-web
+    port: 5678
+    public: true
+
+---
+
+# デプロイ手順（fsi_japan_connection / SFSEAPAC-FSI_JAPAN）:
+#
+# 0. Snowflake Secretsを事前に作成（02_snowflake_setup.sqlを参照）
+#    CREATE SECRET HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET ...
+#    CREATE SECRET HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET ...
+#    CREATE SECRET HELPDESK_DB.SPCS.N8N_ENCRYPTION_SECRET ...
+#    CREATE SECRET HELPDESK_DB.SPCS.N8N_JWT_SECRET ...
+#
+# 1. Dockerレジストリにログイン
+#    snow spcs image-registry login --connection fsi_japan_connection
+#
+# 2. n8n Dockerイメージをビルド・プッシュ
+#    cd smart_helpdesk/n8n
+#    docker build -t sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/n8n_repo/n8n:latest .
+#    docker push sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/n8n_repo/n8n:latest
+#
+# 3. spec.yamlをステージにアップロード
+#    snow stage copy n8n_spec.yaml @HELPDESK_DB.SPCS.N8N_DATA --connection fsi_japan_connection --overwrite
+#
+# 4. サービス作成（02_snowflake_setup.sql のセクション11を参照）
+#
+# 5. デプロイ後、WEBHOOK_URLをn8n UIで設定
+#    SHOW ENDPOINTS IN SERVICE HELPDESK_DB.SPCS.N8N_SVC;
+#    → 取得したURLをn8nの Settings > General > Public Instance URL に設定

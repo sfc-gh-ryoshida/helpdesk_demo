@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  ticket-app:
+    build: ./ticket-app
+    ports:
+      - "3000:3000"
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=helpdesk_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_SSL=true
+    depends_on:
+      - n8n
+
+  n8n:
+    build: ./n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Tokyo
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=helpdesk_db
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-32-char-encryption-key-here}
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
+
+# 使い方:
+# 1. .envファイルを作成
+#    POSTGRES_HOST=helpdesk-postgres.xxxxx.snowflakecomputing.com
+#    POSTGRES_USER=helpdesk_admin
+#    POSTGRES_PASSWORD=your_password
+#    N8N_ENCRYPTION_KEY=your_32_char_random_string
+#
+# 2. ビルド & 起動
+#    docker-compose build
+#    docker-compose up -d
+#
+# 3. アクセス
+#    ticket-app: http://localhost:3000
+#    n8n: http://localhost:5678
