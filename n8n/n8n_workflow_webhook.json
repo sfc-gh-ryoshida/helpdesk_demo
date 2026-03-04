@@ -1,0 +1,322 @@
+{
+  "name": "Smart Helpdesk - Webhook版",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "helpdesk",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "helpdesk-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"received\", \"message\": \"Processing your request\"}"
+      },
+      "id": "respond-immediately",
+      "name": "Respond to Slack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ $env.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/api/v2/cortex/agent:run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Snowflake-Authorization-Token-Type",
+              "value": "KEYPAIR_JWT"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"agent\": \"HELPDESK_DB.APP.HELPDESK_AUTO_RESPONDER\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.text }}\"\n    }\n  ],\n  \"tools\": [],\n  \"response_instruction\": \"JSONのみで返答\"\n}"
+      },
+      "id": "cortex-agent",
+      "name": "Cortex Agent - Auto Responder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentResponse = $input.first().json;\n\ntry {\n  // Cortex Agentのレスポンスをパース\n  let content = agentResponse.choices?.[0]?.message?.content || agentResponse.content || agentResponse;\n  \n  // 文字列の場合はJSONパース\n  if (typeof content === 'string') {\n    // JSONブロックを抽出（```json ... ``` の形式に対応）\n    const jsonMatch = content.match(/```json\\s*([\\s\\S]*?)```/) || content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      content = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n    } else {\n      content = JSON.parse(content);\n    }\n  }\n  \n  return [{\n    json: {\n      can_resolve: content.can_resolve ?? false,\n      confidence: content.confidence ?? 0,\n      matched_kb_id: content.matched_kb_id || null,\n      response: content.response || 'エラーが発生しました',\n      resolution_steps: content.resolution_steps || [],\n      needs_escalation: content.needs_escalation ?? true,\n      escalation_reason: content.escalation_reason || '',\n      escalation_team: content.escalation_team || 'GENERAL_SUPPORT',\n      // 元のSlackメッセージ情報を保持\n      original_text: $('Webhook').first().json.text,\n      user_name: $('Webhook').first().json.user_name,\n      user_id: $('Webhook').first().json.user_id,\n      channel: $('Webhook').first().json.channel,\n      ts: $('Webhook').first().json.ts\n    }\n  }];\n} catch (e) {\n  // パース失敗時\n  return [{\n    json: {\n      can_resolve: false,\n      confidence: 0,\n      matched_kb_id: null,\n      response: 'AI解析に失敗しました',\n      resolution_steps: [],\n      needs_escalation: true,\n      escalation_reason: 'AI解析エラー: ' + e.message,\n      escalation_team: 'GENERAL_SUPPORT',\n      original_text: $('Webhook').first().json.text,\n      user_name: $('Webhook').first().json.user_name,\n      user_id: $('Webhook').first().json.user_id,\n      channel: $('Webhook').first().json.channel,\n      ts: $('Webhook').first().json.ts\n    }\n  }];\n}"
+      },
+      "id": "parse-response",
+      "name": "Parse Agent Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "can-resolve-check",
+              "leftValue": "={{ $json.can_resolve }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "confidence-check",
+              "leftValue": "={{ $json.confidence }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-can-resolve",
+      "name": "Can AI Resolve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🤖 *AIヘルプデスクからの回答*\\n\\n*{{ $json.user_name }}* さんの質問に回答します。\\n\\n📝 *回答:*\\n{{ $json.response }}\\n\\n📋 *解決手順:*\\n{{ $json.resolution_steps.map((s, i) => (i+1) + '. ' + s).join('\\\\n') }}\\n\\n_信頼度: {{ Math.round($json.confidence * 100) }}% | 参照: {{ $json.matched_kb_id || 'N/A' }}_\\n\\n---\\nこの回答で解決しない場合は『担当者に連絡』と投稿してください。\"\n}"
+      },
+      "id": "slack-ai-response",
+      "name": "Slack - AI Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.ai_response_log (response_id, ticket_id, user_message, matched_kb_ids, search_score, ai_response, confidence_score, escalated) VALUES (gen_random_uuid()::text, NULL, '{{ $json.original_text }}', '{{ $json.matched_kb_id }}', {{ $json.confidence }}, '{{ $json.response.replace(/'/g, \"''\") }}', {{ $json.confidence }}, false) RETURNING response_id",
+        "options": {}
+      },
+      "id": "postgres-log-ai",
+      "name": "Log AI Response",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "Helpdesk Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.helpdesk_tickets (ticket_id, reporter_name, location, issue_type, urgency, summary, status, source_channel, source_message_id) VALUES ('TKT-' || to_char(NOW(), 'YYYYMMDD') || '-' || LPAD((SELECT COALESCE(MAX(CAST(SUBSTRING(ticket_id FROM 13) AS INTEGER)), 0) + 1 FROM app.helpdesk_tickets WHERE ticket_id LIKE 'TKT-' || to_char(NOW(), 'YYYYMMDD') || '%')::text, 4, '0'), '{{ $json.user_name }}', NULL, 'OTHER', 'MEDIUM', '{{ $json.original_text.substring(0, 200).replace(/'/g, \"''\") }}', 'OPEN', 'SLACK', '{{ $json.ts }}') RETURNING ticket_id",
+        "options": {}
+      },
+      "id": "postgres-create-ticket",
+      "name": "Create Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1300, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "Helpdesk Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.escalation_log (escalation_id, ticket_id, original_message, ai_response, ai_confidence, escalation_reason, escalation_team) VALUES (gen_random_uuid()::text, '{{ $json.ticket_id }}', '{{ $('Parse Agent Response').first().json.original_text.replace(/'/g, \"''\") }}', '{{ $('Parse Agent Response').first().json.response.replace(/'/g, \"''\") }}', {{ $('Parse Agent Response').first().json.confidence }}, '{{ $('Parse Agent Response').first().json.escalation_reason.replace(/'/g, \"''\") }}', '{{ $('Parse Agent Response').first().json.escalation_team }}')",
+        "options": {}
+      },
+      "id": "postgres-log-escalation",
+      "name": "Log Escalation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "Helpdesk Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🎫 *チケットを登録しました*\\n\\n*{{ $('Parse Agent Response').first().json.user_name }}* さんのお問い合わせを受け付けました。\\n\\n📋 *チケットID:* {{ $json.ticket_id }}\\n📝 *内容:* {{ $('Parse Agent Response').first().json.original_text.substring(0, 100) }}...\\n👥 *担当チーム:* {{ $('Parse Agent Response').first().json.escalation_team }}\\n💬 *理由:* {{ $('Parse Agent Response').first().json.escalation_reason || 'AIで解決できない問題' }}\\n\\n担当者が順次対応いたします。\"\n}"
+      },
+      "id": "slack-escalation",
+      "name": "Slack - Escalation Notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Slack": {
+      "main": [
+        [
+          {
+            "node": "Cortex Agent - Auto Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cortex Agent - Auto Responder": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Agent Response": {
+      "main": [
+        [
+          {
+            "node": "Can AI Resolve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can AI Resolve?": {
+      "main": [
+        [
+          {
+            "node": "Slack - AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - AI Response": {
+      "main": [
+        [
+          {
+            "node": "Log AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Ticket": {
+      "main": [
+        [
+          {
+            "node": "Log Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation": {
+      "main": [
+        [
+          {
+            "node": "Slack - Escalation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "helpdesk",
+      "id": "1"
+    },
+    {
+      "name": "webhook",
+      "id": "2"
+    }
+  ],
+  "meta": {
+    "description": "Slack Webhook経由でヘルプデスク問い合わせを受け、Cortex AgentでFAQ検索・AI回答を生成。解決可能なら自動回答、不可なら担当者にエスカレーション。"
+  }
+}
