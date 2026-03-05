@@ -4,10 +4,21 @@
 Thumbs.db
 
 # Environment files with secrets
+.env
 .env.local
 **/.env.local
 .env.development.local
+.env.test.local
 .env.production.local
+
+# Snowflake connection files (contains credentials)
+snowflake-connection.toml
+**/snowflake-connection.toml
+*.snowflake.toml
+
+# Snowflake logs
+snowflake.log
+*.snowflake.log
 
 # Node.js (ticket-app)
 ticket-app/node_modules/

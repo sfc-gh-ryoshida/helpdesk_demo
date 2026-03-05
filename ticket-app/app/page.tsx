@@ -7,13 +7,9 @@ import {
   AlertCircle,
   Clock,
   CheckCircle,
-  FileText,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
-  Ticket,
 } from "lucide-react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,8 +31,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { TicketModal } from "@/components/TicketModal";
+import { SLABadge } from "@/components/SLAIndicator";
 
 interface TicketType {
   ticket_id: string;
@@ -53,7 +49,7 @@ interface TicketType {
   thread_ts?: string;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const AUTO_REFRESH_INTERVAL = 30000;
 
 export default function Home() {
@@ -163,38 +159,8 @@ export default function Home() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Ticket className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">チケット管理システム</h1>
-              <p className="text-xs text-muted-foreground">スマート社内ヘルプデスク</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/analytics">
-                <BarChart3 className="w-4 h-4 mr-2" />
-                分析
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/logs">
-                <FileText className="w-4 h-4 mr-2" />
-                ログ
-              </Link>
-            </Button>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -314,6 +280,7 @@ export default function Home() {
                     <TableHead>緊急度</TableHead>
                     <TableHead className="min-w-[200px]">要約</TableHead>
                     <TableHead>ステータス</TableHead>
+                    <TableHead>SLA</TableHead>
                     <TableHead>担当者</TableHead>
                     <TableHead>作成日</TableHead>
                   </TableRow>
@@ -368,6 +335,13 @@ export default function Home() {
                             <span className="text-sm">{ticket.status}</span>
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <SLABadge
+                            createdAt={ticket.created_at}
+                            urgency={ticket.urgency}
+                            status={ticket.status}
+                          />
+                        </TableCell>
                         <TableCell>{ticket.assigned_to || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {new Date(ticket.created_at).toLocaleDateString("ja-JP")}
@@ -410,7 +384,6 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
-      </div>
 
       {selectedTicket && (
         <TicketModal
@@ -419,6 +392,6 @@ export default function Home() {
           onUpdate={handleUpdateTicket}
         />
       )}
-    </main>
+    </div>
   );
 }

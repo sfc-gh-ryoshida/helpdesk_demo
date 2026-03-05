@@ -1,0 +1,209 @@
+{
+  "name": "Finance Helpdesk - Snowflake Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "finance",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "67f7033b-6c51-43a1-9d8a-4ef51aaa1e6f",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1100, -200],
+      "webhookId": "finance"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {}
+      },
+      "id": "0280e4f5-bad8-4167-8a65-83ae0e61d7fd",
+      "name": "Respond to Slack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-900, -200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.helpdesk_logs (log_type, user_id, channel_id, message, thread_ts, status, category, created_at)\nVALUES (\n  'INQUIRY',\n  '{{ $('Webhook').first().json.body.user_id }}',\n  '{{ $('Webhook').first().json.body.channel_id }}',\n  '{{ ($('Webhook').first().json.body.message || '').replace(/'/g, \"''\") }}',\n  '{{ $('Webhook').first().json.body.thread_ts || '' }}',\n  'OPEN',\n  'FINANCE',\n  NOW()\n)\nRETURNING id",
+        "options": {}
+      },
+      "id": "log-inquiry-001",
+      "name": "Log Inquiry",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-700, -200],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $('Webhook').first().json.body;\nconst message = (webhookData.message || '').trim();\nconst logId = $('Log Inquiry').first().json.id;\nconst threadTs = webhookData.thread_ts || '';\n\nconst thankPatterns = [\n  /^(ありがとう|有難う|感謝|サンクス|thanks|thank you)/i,\n  /^(了解|りょうかい|わかりました|承知|ok|オッケー)/i,\n  /^(助かり|たすかり)/i\n];\n\nfor (const p of thankPatterns) {\n  if (p.test(message)) {\n    return {\n      json: {\n        skipAgent: true,\n        skipReason: 'thank_you',\n        message: message,\n        logId: logId,\n        threadTs: threadTs,\n        responseText: '👍 ご連絡ありがとうございます。他にご質問があればお気軽にどうぞ！'\n      }\n    };\n  }\n}\n\nconst infoPatterns = [\n  /^[\\d\\-]{4,}$/,\n  /^[\\w\\.\\-]+@[\\w\\.\\-]+\\.[a-z]{2,}$/i,\n  /^社員番号[はがを]?[:：\\s]*[\\d\\-]+$/\n];\n\nfor (const p of infoPatterns) {\n  if (p.test(message)) {\n    return {\n      json: {\n        skipAgent: true,\n        skipReason: 'info_only',\n        message: message,\n        logId: logId,\n        threadTs: threadTs,\n        responseText: '📝 情報を受け取りました。担当者に連絡し、確認後ご連絡いたします。'\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    skipAgent: false,\n    message: message,\n    logId: logId,\n    threadTs: threadTs\n  }\n};"
+      },
+      "id": "check-skip-agent-001",
+      "name": "Check Skip Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-500, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "condition-skip", "leftValue": "={{ $json.skipAgent }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-skip-agent-001",
+      "name": "Skip Agent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-300, -200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE app.helpdesk_logs\nSET ai_response_text = '{{ $json.responseText }}',\n    log_type = 'INFO_RECEIVED'\nWHERE id = {{ $json.logId }}",
+        "options": {}
+      },
+      "id": "update-log-skip-001",
+      "name": "Update Log (Skip)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-100, -350],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $('Webhook').first().json.body.channel_id }}\",\n  \"thread_ts\": \"{{ $('Webhook').first().json.body.thread_ts }}\",\n  \"text\": \"{{ $('Check Skip Agent').first().json.responseText }}\"\n}",
+        "options": {}
+      },
+      "id": "slack-skip-response-001",
+      "name": "Slack - Skip Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [100, -350]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT log_type, message, ai_response_text, status\nFROM app.helpdesk_logs\nWHERE thread_ts = '{{ $('Webhook').first().json.body.thread_ts }}'\n  AND thread_ts != ''\n  AND log_type IN ('INQUIRY', 'AI_RESPONSE')\nORDER BY created_at ASC\nLIMIT 20",
+        "options": {}
+      },
+      "id": "fetch-history-001",
+      "name": "Fetch Conversation History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-100, -100],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $('Webhook').first().json.body;\nconst historyRows = $('Fetch Conversation History').all();\nconst currentMessage = webhookData.message;\n\nconst messages = [];\n\nfunction sanitizeText(text) {\n  if (!text) return '';\n  return String(text).replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n').replace(/\\r/g, '\\\\r').replace(/\\t/g, '\\\\t');\n}\n\nfor (const row of historyRows) {\n  if (row.json.log_type === 'INQUIRY') {\n    messages.push({ role: 'user', content: [{ type: 'text', text: sanitizeText(row.json.message) }] });\n  } else if (row.json.log_type === 'AI_RESPONSE' && row.json.ai_response_text) {\n    messages.push({ role: 'assistant', content: [{ type: 'text', text: sanitizeText(row.json.ai_response_text) }] });\n  }\n}\n\nmessages.push({ role: 'user', content: [{ type: 'text', text: sanitizeText(currentMessage) }] });\n\nconst payload = JSON.stringify({ messages });\nconst escapedPayload = payload.replace(/'/g, \"''\");\n\nreturn { json: { messages, messageCount: messages.length, isMultiTurn: messages.length > 1, agentPayload: escapedPayload } };"
+      },
+      "id": "build-messages-001",
+      "name": "Build Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [100, -100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(\n  'HELPDESK_DB.APP.FINANCE_AGENT',\n  '{{ $json.agentPayload }}'\n) AS response;"
+      },
+      "id": "56f1942d-6dc4-4583-b3b8-66b9ac091819",
+      "name": "Call Cortex Agent",
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1,
+      "position": [300, -100],
+      "credentials": { "snowflake": { "id": "y23VaUVNHhdumfkZ", "name": "Snowflake account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst webhookData = $('Webhook').first().json.body;\nconst logId = $('Log Inquiry').first().json.id;\nconst messageInfo = $('Build Messages').first().json;\n\ntry {\n  const agentResponse = JSON.parse(response.RESPONSE || response.response || '{}');\n  const contentArray = agentResponse.content || [];\n  const textContent = contentArray.find(c => c.type === 'text');\n  const content = textContent?.text || '';\n  \n  let aiResponseText = content;\n  const jsonMatch = content.match(/```json\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    aiResponseText = content.split('```').pop()?.trim().replace(/^[-\\s]+/, '') || content;\n  }\n  \n  const metadata = agentResponse.metadata || {};\n  const tokensConsumed = metadata.usage?.tokens_consumed?.[0] || {};\n  \n  return {\n    json: {\n      inquiry_log_id: logId,\n      user_id: webhookData.user_id,\n      channel_id: webhookData.channel_id,\n      thread_ts: webhookData.thread_ts || '',\n      original_message: webhookData.message || '',\n      category: 'FINANCE',\n      priority: 'MEDIUM',\n      summary: (webhookData.message || '').substring(0, 100),\n      ai_response_text: aiResponseText,\n      raw_response: content,\n      turn_number: messageInfo.messageCount,\n      is_multi_turn: messageInfo.isMultiTurn,\n      tokens_input: tokensConsumed.input_tokens?.total || 0,\n      tokens_output: tokensConsumed.output_tokens?.total || 0,\n      model_name: tokensConsumed.model_name || 'unknown'\n    }\n  };\n} catch (e) {\n  return {\n    json: {\n      inquiry_log_id: logId,\n      user_id: webhookData.user_id,\n      channel_id: webhookData.channel_id,\n      thread_ts: webhookData.thread_ts || '',\n      original_message: webhookData.message || '',\n      category: 'FINANCE',\n      priority: 'MEDIUM',\n      summary: 'Error parsing response',\n      ai_response_text: 'エラーが発生しました。担当者に連絡します。',\n      turn_number: 1,\n      is_multi_turn: false\n    }\n  };\n}"
+      },
+      "id": "0543556e-3cfb-46d5-b8a8-d795f52bb4bb",
+      "name": "Parse Agent Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, -100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.helpdesk_logs (\n  log_type, inquiry_id, user_id, channel_id, message, category, priority, summary,\n  ai_response_text, thread_ts, turn_number, is_multi_turn, status, created_at\n)\nVALUES (\n  'AI_RESPONSE',\n  {{ $json.inquiry_log_id }},\n  '{{ $json.user_id }}',\n  '{{ $json.channel_id }}',\n  '{{ $json.original_message.replace(/'/g, \"''\") }}',\n  '{{ $json.category }}',\n  '{{ $json.priority }}',\n  '{{ ($json.summary || \"\").replace(/'/g, \"''\") }}',\n  '{{ ($json.ai_response_text || \"\").replace(/'/g, \"''\") }}',\n  '{{ $json.thread_ts }}',\n  {{ $json.turn_number || 1 }},\n  {{ $json.is_multi_turn || false }},\n  'IN_PROGRESS',\n  NOW()\n)\nRETURNING id",
+        "options": {}
+      },
+      "id": "a436235b-b084-4736-bb02-d5b12a44654c",
+      "name": "Log AI Response",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, -100],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.finance_tickets (\n  ticket_id, reporter_name, request_type, urgency, summary, source_channel, status, thread_ts, log_id, created_at\n)\nVALUES (\n  'FIN-' || TO_CHAR(NOW(), 'YYYYMMDD-HH24MISS'),\n  '{{ $('Parse Agent Response').first().json.user_id }}',\n  '{{ $('Parse Agent Response').first().json.category }}',\n  '{{ $('Parse Agent Response').first().json.priority }}',\n  '{{ ($('Parse Agent Response').first().json.summary || \"\").replace(/'/g, \"''\") }}',\n  'slack',\n  'OPEN',\n  '{{ $('Parse Agent Response').first().json.thread_ts }}',\n  {{ $json.id }},\n  NOW()\n)\nRETURNING ticket_id",
+        "options": {}
+      },
+      "id": "create-ticket-auto",
+      "name": "Create Finance Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [900, -100],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (function() {\n  const turnNumber = $('Parse Agent Response').first().json.turn_number || 1;\n  const isFirstTurn = turnNumber === 1;\n  let aiText = ($('Parse Agent Response').first().json.ai_response_text || '').substring(0, 2900);\n  aiText = aiText.replace(/\\\\n/g, '\\n').replace(/\\\"/g, '\"');\n  const logId = $('Log AI Response').first().json.id;\n  const ticketId = $json.ticket_id;\n  const category = $('Parse Agent Response').first().json.category;\n  const priority = $('Parse Agent Response').first().json.priority;\n  const channelId = $('Parse Agent Response').first().json.channel_id;\n  const threadTs = $('Parse Agent Response').first().json.thread_ts;\n\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: ':moneybag: *経理AI回答*' } },\n    { type: 'section', text: { type: 'mrkdwn', text: aiText } },\n    { type: 'divider' },\n    { type: 'context', elements: [{ type: 'mrkdwn', text: ':ticket: チケット: `' + ticketId + '` | :label: ' + category + ' | :zap: ' + priority }] },\n    { type: 'section', text: { type: 'mrkdwn', text: 'この回答は役に立ちましたか？' } }\n  ];\n\n  const actionElements = [\n    { type: 'button', text: { type: 'plain_text', text: '✅ 解決しました' }, style: 'primary', action_id: 'resolved', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'finance' }) }\n  ];\n\n  if (isFirstTurn) {\n    actionElements.push({ type: 'button', text: { type: 'plain_text', text: '🚨 エスカレーション' }, style: 'danger', action_id: 'escalate', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'finance' }) });\n  }\n\n  blocks.push({ type: 'actions', block_id: 'finance_feedback_' + logId, elements: actionElements });\n\n  return JSON.stringify({ channel: channelId, thread_ts: threadTs, text: 'AI回答', blocks: blocks });\n})() }}",
+        "options": {}
+      },
+      "id": "cf387f20-6a13-444e-b698-ce42e41d2f22",
+      "name": "Slack - AI Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -100]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Respond to Slack", "type": "main", "index": 0 }]] },
+    "Respond to Slack": { "main": [[{ "node": "Log Inquiry", "type": "main", "index": 0 }]] },
+    "Log Inquiry": { "main": [[{ "node": "Check Skip Agent", "type": "main", "index": 0 }]] },
+    "Check Skip Agent": { "main": [[{ "node": "Skip Agent?", "type": "main", "index": 0 }]] },
+    "Skip Agent?": { "main": [[{ "node": "Update Log (Skip)", "type": "main", "index": 0 }], [{ "node": "Fetch Conversation History", "type": "main", "index": 0 }]] },
+    "Update Log (Skip)": { "main": [[{ "node": "Slack - Skip Response", "type": "main", "index": 0 }]] },
+    "Fetch Conversation History": { "main": [[{ "node": "Build Messages", "type": "main", "index": 0 }]] },
+    "Build Messages": { "main": [[{ "node": "Call Cortex Agent", "type": "main", "index": 0 }]] },
+    "Call Cortex Agent": { "main": [[{ "node": "Parse Agent Response", "type": "main", "index": 0 }]] },
+    "Parse Agent Response": { "main": [[{ "node": "Log AI Response", "type": "main", "index": 0 }]] },
+    "Log AI Response": { "main": [[{ "node": "Create Finance Ticket", "type": "main", "index": 0 }]] },
+    "Create Finance Ticket": { "main": [[{ "node": "Slack - AI Response", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}

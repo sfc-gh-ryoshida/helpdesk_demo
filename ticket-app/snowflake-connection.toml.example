@@ -1,0 +1,12 @@
+# Snowflake Connection Configuration
+# Copy this file to snowflake-connection.toml and fill in your credentials
+# IMPORTANT: Do NOT commit snowflake-connection.toml to git
+
+[default]
+account = "YOUR_ACCOUNT"
+user = "YOUR_USER"
+password = "YOUR_PASSWORD_OR_JWT"
+database = "HELPDESK_DB"
+schema = "APP"
+warehouse = "YOUR_WAREHOUSE"
+role = "YOUR_ROLE"

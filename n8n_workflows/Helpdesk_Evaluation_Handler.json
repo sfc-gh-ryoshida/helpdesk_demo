@@ -1,0 +1,163 @@
+{
+  "name": "Helpdesk Evaluation Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "helpdesk-evaluation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-eval",
+      "name": "Webhook - Evaluation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-600, 0],
+      "webhookId": "helpdesk-evaluation"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {}
+      },
+      "id": "respond-eval",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook - Evaluation').first().json.body;\nlet valueData = {};\ntry {\n  valueData = JSON.parse(body.value || '{}');\n} catch (e) {\n  valueData = { log_id: body.log_id, ticket_id: body.ticket_id, category: body.category || 'it' };\n}\n\nreturn {\n  json: {\n    log_id: valueData.log_id || body.log_id,\n    ticket_id: valueData.ticket_id || body.ticket_id,\n    category: valueData.category || body.category || 'it',\n    evaluation: body.evaluation,\n    user_id: body.user_id,\n    channel_id: body.channel_id,\n    thread_ts: body.thread_ts || '',\n    comment: body.comment || ''\n  }\n};"
+      },
+      "id": "parse-value",
+      "name": "Parse Value",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.helpdesk_logs (log_type, inquiry_id, user_id, channel_id, evaluation, evaluation_comment, thread_ts, created_at)\nVALUES ('EVALUATION', {{ $json.log_id || 'NULL' }}, '{{ $json.user_id }}', '{{ $json.channel_id }}', '{{ $json.evaluation }}', '{{ ($json.comment || '').replace(/'/g, \"''\") }}', '{{ $json.thread_ts }}', NOW())\nRETURNING id",
+        "options": {}
+      },
+      "id": "log-eval",
+      "name": "Log Evaluation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [0, 0],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "is-escalate", "leftValue": "={{ $('Parse Value').first().json.evaluation }}", "rightValue": "escalate", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-escalate",
+      "name": "Escalate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse Value').first().json;\nconst category = (data.category || 'it').toLowerCase();\n\nlet tableName = 'app.helpdesk_tickets';\nif (category === 'hr') tableName = 'app.hr_tickets';\nelse if (category === 'finance') tableName = 'app.finance_tickets';\n\nreturn {\n  json: {\n    ...data,\n    tableName\n  }\n};"
+      },
+      "id": "get-table",
+      "name": "Get Table Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE app.helpdesk_logs SET status = 'ESCALATED' WHERE id = {{ $json.log_id }};\nUPDATE {{ $json.tableName }} SET status = 'ESCALATED' WHERE ticket_id = '{{ $json.ticket_id }}';",
+        "options": {}
+      },
+      "id": "update-escalate",
+      "name": "Update Status (Escalate)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [600, -100],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":rotating_light: *エスカレーション*\\n\\nチケット `{{ $('Parse Value').first().json.ticket_id }}` を担当者にエスカレーションしました。\\n折り返しご連絡いたします。\"\n}",
+        "options": {}
+      },
+      "id": "slack-escalate",
+      "name": "Slack - Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse Value').first().json;\nconst category = (data.category || 'it').toLowerCase();\n\nlet tableName = 'app.helpdesk_tickets';\nif (category === 'hr') tableName = 'app.hr_tickets';\nelse if (category === 'finance') tableName = 'app.finance_tickets';\n\nreturn {\n  json: {\n    ...data,\n    tableName\n  }\n};"
+      },
+      "id": "get-table-resolved",
+      "name": "Get Table Name (Resolved)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE app.helpdesk_logs SET status = 'RESOLVED', resolved_at = NOW() WHERE id = {{ $json.log_id }};\nUPDATE app.helpdesk_logs SET status = 'RESOLVED' WHERE thread_ts = '{{ $json.thread_ts }}' AND thread_ts != '' AND status NOT IN ('RESOLVED', 'ESCALATED');\nUPDATE {{ $json.tableName }} SET status = 'RESOLVED', resolved_at = NOW() WHERE ticket_id = '{{ $json.ticket_id }}';",
+        "options": {}
+      },
+      "id": "update-resolved",
+      "name": "Update Status (Resolved)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [600, 100],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":white_check_mark: 解決済みとして記録しました。ご利用ありがとうございました！\"\n}",
+        "options": {}
+      },
+      "id": "slack-resolved",
+      "name": "Slack - Resolved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 100]
+    }
+  ],
+  "connections": {
+    "Webhook - Evaluation": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Respond": { "main": [[{ "node": "Parse Value", "type": "main", "index": 0 }]] },
+    "Parse Value": { "main": [[{ "node": "Log Evaluation", "type": "main", "index": 0 }]] },
+    "Log Evaluation": { "main": [[{ "node": "Escalate?", "type": "main", "index": 0 }]] },
+    "Escalate?": { "main": [[{ "node": "Get Table Name", "type": "main", "index": 0 }], [{ "node": "Get Table Name (Resolved)", "type": "main", "index": 0 }]] },
+    "Get Table Name": { "main": [[{ "node": "Update Status (Escalate)", "type": "main", "index": 0 }]] },
+    "Update Status (Escalate)": { "main": [[{ "node": "Slack - Escalation", "type": "main", "index": 0 }]] },
+    "Get Table Name (Resolved)": { "main": [[{ "node": "Update Status (Resolved)", "type": "main", "index": 0 }]] },
+    "Update Status (Resolved)": { "main": [[{ "node": "Slack - Resolved", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}
