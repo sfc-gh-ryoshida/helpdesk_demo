@@ -71,7 +71,7 @@ Snowsight から以下の手順で作成:
 4. Create をクリック
 
 作成後、接続情報をメモ:
-- Host: fjf7gro575djnc7hampgj7jqam.sfseapac-fsi-japan.us-west-2.aws.postgres.snowflake.app
+- Host: <YOUR_POSTGRES_HOST>.postgres.snowflake.app
 - Port: 5432
 - User: snowflake_admin
 - Database: postgres
@@ -94,12 +94,12 @@ CREATE OR REPLACE SECRET HELPDESK_DB.SPCS.N8N_JWT_SECRET
 -- Postgres接続情報（Snowflake Postgres を使う場合）
 CREATE OR REPLACE SECRET HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET
   TYPE = GENERIC_STRING
-  SECRET_STRING = 'fjf7gro575djnc7hampgj7jqam.sfseapac-fsi-japan.us-west-2.aws.postgres.snowflake.app';
+  SECRET_STRING = '<YOUR_POSTGRES_HOST>.postgres.snowflake.app';
 
 CREATE OR REPLACE SECRET HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET
   TYPE = PASSWORD
-  USERNAME = 'snowflake_admin'
-  PASSWORD = 'your-postgres-password';
+  USERNAME = '<YOUR_POSTGRES_USER>'
+  PASSWORD = '<YOUR_POSTGRES_PASSWORD>';
 
 -- 確認
 SHOW SECRETS IN SCHEMA HELPDESK_DB.SPCS;
@@ -134,7 +134,7 @@ CREATE OR REPLACE NETWORK RULE HELPDESK_DB.SPCS.POSTGRES_RULE
   MODE = EGRESS
   TYPE = HOST_PORT
   VALUE_LIST = (
-    'fjf7gro575djnc7hampgj7jqam.sfseapac-fsi-japan.us-west-2.aws.postgres.snowflake.app:5432'
+    '<YOUR_POSTGRES_HOST>.postgres.snowflake.app:5432'
   );
 
 -- 外部アクセス統合

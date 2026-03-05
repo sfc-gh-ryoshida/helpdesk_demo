@@ -699,6 +699,104 @@ docker login sfseapac-fsi_japan.registry.snowflakecomputing.com
 
 ---
 
+## Step 11: AWS Lambda デプロイ
+
+> Slack連携のためのLambda関数をデプロイ
+
+### 11.1 ローカルファイル構成
+
+```
+smart_helpdesk/
+├── slack_app.py           # Lambda関数のソースコード
+└── package/               # 依存ライブラリ（pip installで作成）
+    ├── slack_sdk/
+    ├── requests/
+    └── ...
+```
+
+### 11.2 Lambda パッケージ作成
+
+```bash
+# 作業ディレクトリに移動
+cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk
+
+# slack_app.py を package/ にコピー（lambda_function.py としてリネーム）
+# package/ 内のライブラリと一緒にZIP化
+cp slack_app.py ./package/lambda_function.py && cd package && zip -r ../lambda_package.zip . -q && cd ..
+
+# 確認
+ls -lh lambda_package.zip
+```
+
+### 11.3 依存ライブラリのインストール（初回のみ）
+
+```bash
+cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk
+
+# package/ ディレクトリに依存ライブラリをインストール
+pip install slack_sdk requests -t ./package/
+```
+
+### 11.4 AWS Lambda へのアップロード
+
+**AWS Console から:**
+1. AWS Console → Lambda → `smart-helpdesk-slack` 関数
+2. 「コード」タブ → 「Upload from」 → 「.zip file」
+3. `lambda_package.zip` を選択してアップロード
+4. 「Deploy」をクリック
+
+**AWS CLI から:**
+```bash
+aws lambda update-function-code \
+  --function-name smart-helpdesk-slack \
+  --zip-file fileb://lambda_package.zip
+```
+
+### 11.5 Lambda 環境変数
+
+| 変数名 | 説明 | 値 |
+|--------|------|-----|
+| `SLACK_BOT_TOKEN` | Slack Bot Token | `xoxb-xxxxx...` |
+| `SLACK_SIGNING_SECRET` | Slack Signing Secret | （Slack Appから取得） |
+| `N8N_WEBHOOK_URL` | n8n Webhook URL | `https://nqa4qd3u-sfseapac-fsi-japan.snowflakecomputing.app/webhook/helpdesk` |
+| `N8N_EVALUATION_URL` | 評価フロー用URL | `https://nqa4qd3u-sfseapac-fsi-japan.snowflakecomputing.app/webhook/helpdesk-evaluation` |
+| `SNOWFLAKE_PAT` | SPCS認証用PAT | N8N_USER用のProgrammatic Access Token |
+
+### 11.6 Lambda テスト
+
+1. AWS Console → Lambda → `smart-helpdesk-slack`
+2. 「テスト」タブ → テストイベントを作成
+3. テストイベント例:
+```json
+{
+  "body": "{\"type\":\"url_verification\",\"challenge\":\"test123\"}",
+  "headers": {
+    "Content-Type": "application/json"
+  }
+}
+```
+4. 「テスト」をクリック → `{"challenge": "test123"}` が返ればOK
+
+### 11.7 API Gateway 設定
+
+1. AWS Console → API Gateway → `smart-helpdesk-api`
+2. リソース: `/slack/events` (POST)
+3. 統合: Lambda関数 `smart-helpdesk-slack`
+4. エンドポイントURL: `https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/prod/slack/events`
+
+### 11.8 Slack App 設定
+
+1. https://api.slack.com/apps でAppを選択
+2. **Event Subscriptions** → Enable Events: **On**
+3. **Request URL**: API Gateway のエンドポイントURL
+4. **Subscribe to bot events**:
+   - `app_mention`
+   - `message.im`
+5. **Interactivity & Shortcuts** → Enable: **On**
+6. **Request URL**: API Gateway のエンドポイントURL（同じ）
+
+---
+
 ## クリーンアップ
 
 ```sql

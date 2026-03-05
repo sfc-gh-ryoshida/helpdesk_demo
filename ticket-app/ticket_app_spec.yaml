@@ -45,7 +45,7 @@ spec:
 # 2. ticket-app Dockerイメージをビルド・プッシュ
 #    cd smart_helpdesk/ticket-app
 #    docker build -t sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest .
-#    docker push sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest
+#    docker push sfseapac-fsi-japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest
 #
 # 3. spec.yamlをステージにアップロード
 #    snow stage copy ticket_app_spec.yaml @HELPDESK_DB.SPCS.TICKET_APP_DATA --connection fsi_japan_connection --overwrite

@@ -18,6 +18,14 @@ build/
 .env.test.local
 .env.production.local
 
+# Snowflake connection files (contains credentials)
+snowflake-connection.toml
+*.snowflake.toml
+
+# Snowflake logs
+snowflake.log
+*.snowflake.log
+
 # Debug logs
 npm-debug.log*
 yarn-debug.log*

@@ -1,6 +1,11 @@
 # Helpdesk Ticket App
 
-社内ヘルプデスクのチケット管理ダッシュボード
+社内ヘルプデスクのチケット管理ダッシュボード（IT/人事/経理の3カテゴリ対応）
+
+## 前提条件
+
+- **Node.js >= v18.17.0** (Next.js 14の要件)
+- 推奨: v22.16.0
 
 ## クイックスタート
 
@@ -12,11 +17,15 @@ npm install
 cp .env.example .env.local
 # .env.local を編集してDB接続情報を入力
 
-# 3. 開発サーバー起動
+# 3. 開発サーバー起動（Node.jsバージョン指定）
+export PATH="/Users/ryoshida/.nvm/versions/node/v22.16.0/bin:$PATH" && npm run dev -- -p 3001
+
+# または nvm を使用
+nvm use 22
 npm run dev
 ```
 
-http://localhost:3000 でアクセス
+http://localhost:3001 でアクセス
 
 ## 環境変数
 
@@ -35,11 +44,14 @@ http://localhost:3000 でアクセス
 
 | ページ | パス | 説明 |
 |--------|------|------|
-| チケット一覧 | `/` | 検索・フィルタ・ページネーション |
+| ITチケット一覧 | `/` | IT関連チケット（青アクセント） |
+| 人事チケット一覧 | `/hr` | 人事関連チケット（緑アクセント） |
+| 経理チケット一覧 | `/finance` | 経理関連チケット（紫アクセント） |
 | 対話ログ | `/logs` | Slackスレッド単位のログ閲覧 |
 | 分析 | `/analytics` | グラフによる可視化 |
 
 ### 主な機能
+- **マルチカテゴリ対応**: サイドバーでIT/人事/経理を切り替え
 - ダークモード切替
 - 30秒自動更新
 - チケット検索（ID/報告者/要約）
@@ -52,6 +64,21 @@ http://localhost:3000 でアクセス
 - shadcn/ui + Tailwind CSS
 - Recharts（グラフ）
 - PostgreSQL (Snowflake Postgres)
+
+## トラブルシューティング
+
+### CSS/レイアウトが崩れる場合
+Node.jsのバージョンが古い可能性があります。v22.16.0を使用してください：
+```bash
+export PATH="/Users/ryoshida/.nvm/versions/node/v22.16.0/bin:$PATH" && npm run dev -- -p 3001
+```
+
+### エラー: "Node.js version >= v18.17.0 is required"
+Node.jsをアップグレードしてください：
+```bash
+nvm install 22
+nvm use 22
+```
 
 ## 本番ビルド
 
