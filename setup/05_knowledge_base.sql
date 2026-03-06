@@ -1,6 +1,7 @@
 -- ============================================================
--- ナレッジベース（FAQ）セットアップ
--- AI自動応答 + エスカレーション機能
+-- ナレッジベース セットアップ
+-- スマート社内ヘルプデスク
+-- Step 5: FAQテーブル、サンプルデータ、Cortex Search
 -- ============================================================
 
 USE DATABASE HELPDESK_DB;
@@ -12,16 +13,16 @@ USE SCHEMA APP;
 
 CREATE OR REPLACE TABLE HELPDESK_DB.APP.KNOWLEDGE_BASE (
     kb_id VARCHAR(50) PRIMARY KEY,
-    category VARCHAR(50),           -- HARDWARE, SOFTWARE, ACCOUNT, NETWORK, OTHER
-    subcategory VARCHAR(100),       -- より詳細なカテゴリ
-    question TEXT,                  -- よくある質問
-    answer TEXT,                    -- 回答
-    keywords TEXT,                  -- 検索用キーワード
-    resolution_steps TEXT,          -- 解決手順（JSON配列）
-    related_kb_ids TEXT,            -- 関連FAQ ID（カンマ区切り）
-    confidence_threshold FLOAT,     -- この回答を使う信頼度閾値
-    requires_escalation BOOLEAN,    -- 常にエスカレーションが必要か
-    escalation_team VARCHAR(50),    -- エスカレーション先チーム
+    category VARCHAR(50),
+    subcategory VARCHAR(100),
+    question TEXT,
+    answer TEXT,
+    keywords TEXT,
+    resolution_steps TEXT,
+    related_kb_ids TEXT,
+    confidence_threshold FLOAT,
+    requires_escalation BOOLEAN,
+    escalation_team VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     view_count INT DEFAULT 0,
@@ -163,106 +164,28 @@ AS (
 );
 
 
-
 -- ============================================================
--- 4. Cortex Agent（ナレッジ検索対応版）
--- ============================================================
-
-CREATE OR REPLACE AGENT HELPDESK_DB.APP.HELPDESK_AGENT
-  COMMENT = '社内ヘルプデスクAIエージェント - FAQ検索と資産検索'
-  FROM SPECIFICATION
-  $$
-  models:
-    orchestration: claude-sonnet-4-6
-
-  orchestration:
-    budget:
-      seconds: 60
-      tokens: 16000
-
-  instructions:
-    response: |
-      回答は日本語で、簡潔かつ親切に行ってください。
-      解決手順がある場合は番号付きリストで提示してください。
-    orchestration: |
-      ユーザーの問い合わせに対して、まずKnowledgeSearchでFAQを検索してください。
-      FAQで解決できない場合や、機器の特定が必要な場合はAssetSearchを使用してください。
-    system: |
-      あなたは社内ヘルプデスクのAIアシスタントです。
-      物流倉庫・配送ドライバー向けのITサポートを担当しています。
-      
-      主な対応範囲：
-      - スキャナー、PC、プリンターなどのハードウェアトラブル
-      - WMS、配送アプリ、ナビなどのソフトウェア問題
-      - パスワード、アカウント関連の問い合わせ
-      - ネットワーク接続の問題
-      - 車両トラブル、安全に関する問い合わせ
-      
-      回答時は以下のJSON形式で出力してください：
-      {
-        "reporter_name": "報告者名（わかれば）",
-        "department": "部署（わかれば）",
-        "category": "HARDWARE/SOFTWARE/ACCOUNT/NETWORK/OTHER",
-        "priority": "HIGH/MEDIUM/LOW",
-        "summary": "問い合わせ要約",
-        "details": ["詳細1", "詳細2"],
-        "matched_asset_id": "資産ID（わかれば）",
-        "response": "ユーザーへの回答テキスト",
-        "resolution_steps": ["手順1", "手順2"],
-        "needs_escalation": true/false,
-        "escalation_team": "エスカレーション先（必要な場合）"
-      }
-    sample_questions:
-      - question: "スキャナーの電源が入りません"
-        answer: "バッテリーの充電状態を確認します。充電器に30分以上接続しても起動しない場合はバッテリー交換が必要です。"
-      - question: "WMSにログインできない"
-        answer: "パスワードの有効期限切れの可能性があります。パスワードリセットを試してください。"
-      - question: "配送アプリが固まった"
-        answer: "アプリを強制終了して再起動してください。端末の再起動も試してください。"
-
-  tools:
-    - tool_spec:
-        type: "cortex_search"
-        name: "KnowledgeSearch"
-        description: "FAQナレッジベースを検索して、問い合わせに対する回答と解決手順を取得します"
-    - tool_spec:
-        type: "cortex_search"
-        name: "AssetSearch"
-        description: "IT資産（PC、スキャナー、プリンター等）の情報を従業員名や部署から検索します"
-
-  tool_resources:
-    KnowledgeSearch:
-      name: "HELPDESK_DB.APP.KNOWLEDGE_SEARCH_SERVICE"
-      max_results: "5"
-    AssetSearch:
-      name: "HELPDESK_DB.APP.ASSET_SEARCH_SERVICE"
-      max_results: "3"
-  $$;
-
-
--- ============================================================
--- 5. 権限設定
+-- 4. 権限設定
 -- ============================================================
 
 GRANT SELECT, INSERT, UPDATE ON HELPDESK_DB.APP.KNOWLEDGE_BASE TO ROLE SYSADMIN;
 GRANT USAGE ON CORTEX SEARCH SERVICE HELPDESK_DB.APP.KNOWLEDGE_SEARCH_SERVICE TO ROLE SYSADMIN;
-GRANT USAGE ON AGENT HELPDESK_DB.APP.HELPDESK_AGENT TO ROLE SYSADMIN;
 
 
 -- ============================================================
--- 6. 動作確認
+-- 5. 動作確認
 -- ============================================================
 
 -- ナレッジ検索テスト
 SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
     'HELPDESK_DB.APP.KNOWLEDGE_SEARCH_SERVICE',
-    '{\"query\": \"スキャナーの電源が入らない\", \"columns\": [\"kb_id\", \"category\", \"question\", \"answer\"], \"limit\": 3}'
+    '{"query": "スキャナーの電源が入らない", "columns": ["kb_id", "category", "question", "answer"], "limit": 3}'
 );
 
 -- WMSログインできない場合のテスト
 SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
     'HELPDESK_DB.APP.KNOWLEDGE_SEARCH_SERVICE',
-    '{\"query\": \"WMSにログインできません\", \"columns\": [\"kb_id\", \"question\", \"answer\"], \"limit\": 3}'
+    '{"query": "WMSにログインできません", "columns": ["kb_id", "question", "answer"], "limit": 3}'
 );
 
 -- FAQ一覧確認
