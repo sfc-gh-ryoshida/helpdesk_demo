@@ -14,9 +14,6 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Monitor,
-  Users,
-  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -28,24 +25,10 @@ import {
 } from "@/components/ui/tooltip";
 import { useState } from "react";
 
-const helpdeskApps = [
-  { id: "it", href: "/", icon: Monitor, label: "IT", color: "text-blue-500" },
-  { id: "hr", href: "/hr", icon: Users, label: "人事", color: "text-green-500" },
-  { id: "finance", href: "/finance", icon: Calculator, label: "経理", color: "text-purple-500" },
-];
-
 const mainNavItems = [
   { href: "/", icon: Ticket, label: "チケット" },
   { href: "/analytics", icon: BarChart3, label: "分析" },
   { href: "/logs", icon: MessageSquare, label: "ログ" },
-];
-
-const hrNavItems = [
-  { href: "/hr", icon: Ticket, label: "チケット" },
-];
-
-const financeNavItems = [
-  { href: "/finance", icon: Ticket, label: "チケット" },
 ];
 
 const itsmNavItems = [
@@ -62,22 +45,6 @@ const adminNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-
-  const getCurrentApp = () => {
-    if (pathname.startsWith("/hr")) return "hr";
-    if (pathname.startsWith("/finance")) return "finance";
-    return "it";
-  };
-
-  const currentApp = getCurrentApp();
-
-  const getNavItemsForApp = () => {
-    switch (currentApp) {
-      case "hr": return hrNavItems;
-      case "finance": return financeNavItems;
-      default: return mainNavItems;
-    }
-  };
 
   const NavItem = ({
     href,
@@ -130,43 +97,6 @@ export function Sidebar() {
     return content;
   };
 
-  const AppSwitcher = () => {
-    return (
-      <div className="space-y-1">
-        {helpdeskApps.map((app) => {
-          const content = (
-            <Link
-              key={app.id}
-              href={app.href}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-3 py-2 transition-colors",
-                currentApp === app.id
-                  ? "bg-muted ring-2 ring-primary"
-                  : "hover:bg-muted/50",
-                collapsed && "justify-center px-2"
-              )}
-            >
-              <app.icon className={cn("h-5 w-5 shrink-0", app.color)} />
-              {!collapsed && <span className="text-sm font-medium">{app.label}</span>}
-            </Link>
-          );
-
-          if (collapsed) {
-            return (
-              <Tooltip key={app.id}>
-                <TooltipTrigger asChild>{content}</TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{app.label}ヘルプデスク</p>
-                </TooltipContent>
-              </Tooltip>
-            );
-          }
-          return content;
-        })}
-      </div>
-    );
-  };
-
   return (
     <TooltipProvider delayDuration={0}>
       <aside
@@ -185,14 +115,11 @@ export function Sidebar() {
           {collapsed && <Ticket className="mx-auto h-6 w-6 text-primary" />}
         </div>
 
-        <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
+        <nav className="flex-1 space-y-1 p-2">
           <div className="space-y-1">
-            {!collapsed && (
-              <p className="mb-2 px-3 text-xs font-medium text-muted-foreground">
-                ヘルプデスク
-              </p>
-            )}
-            <AppSwitcher />
+            {mainNavItems.map((item) => (
+              <NavItem key={item.href} {...item} />
+            ))}
           </div>
 
           <div className="my-4 border-t" />
@@ -200,29 +127,13 @@ export function Sidebar() {
           <div className="space-y-1">
             {!collapsed && (
               <p className="mb-2 px-3 text-xs font-medium text-muted-foreground">
-                メニュー
+                ITSM
               </p>
             )}
-            {getNavItemsForApp().map((item) => (
+            {itsmNavItems.map((item) => (
               <NavItem key={item.href} {...item} />
             ))}
           </div>
-
-          {currentApp === "it" && (
-            <>
-              <div className="my-4 border-t" />
-              <div className="space-y-1">
-                {!collapsed && (
-                  <p className="mb-2 px-3 text-xs font-medium text-muted-foreground">
-                    ITSM
-                  </p>
-                )}
-                {itsmNavItems.map((item) => (
-                  <NavItem key={item.href} {...item} />
-                ))}
-              </div>
-            </>
-          )}
 
           <div className="my-4 border-t" />
 

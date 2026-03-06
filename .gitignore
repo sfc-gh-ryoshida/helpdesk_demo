@@ -29,6 +29,7 @@ ticket-app/.pnp.js
 # Build artifacts
 lambda_package.zip
 package/
+*.tsbuildinfo
 
 # Python
 __pycache__/
@@ -45,3 +46,11 @@ venv/
 # Logs
 *.log
 npm-debug.log*
+
+# Working files (local dev only)
+Smart_Helpdesk___Snowflake_Agent*.json
+n8n_workflow_helpdesk.json
+n8n/n8n_workflow.json
+n8n/n8n_workflow_webhook.json
+streamlit/
+update_workflow.py
