@@ -27,8 +27,7 @@
 | IAMロールARN | `arn:aws:iam::123456789012:role/helpdesk-iceberg-role` | SnowflakeがS3にアクセスするためのロール |
 
 **対象ファイル:**
-- `setup/01_postgres_setup.sql` - `SET pg_lake_iceberg.default_location_prefix`
-- `setup/02_snowflake_setup.sql` - `CREATE EXTERNAL VOLUME`
+- `setup/03_iceberg_setup.sql` - `CREATE EXTERNAL VOLUME`, pg_lake設定
 
 **IAMロール設定手順:**
 1. AWS IAMでロールを作成
@@ -59,7 +58,8 @@
 | 管理者パスワード | `<your_secure_password>` | PostgresインスタンスのADMIN_PASSWORD |
 
 **対象ファイル:**
-- `setup/01_postgres_setup.sql` - `CREATE POSTGRES INSTANCE`
+- `setup/02_postgres_setup.sql` - `CREATE POSTGRES INSTANCE`
+- `setup/01_snowflake_base.sql` - Postgres Secrets
 - `.env.example` → `.env` - `POSTGRES_PASSWORD`
 - `n8n/n8n_spec.yaml` - secrets.postgres_password
 - `ticket-app/ticket_app_spec.yaml` - secrets.postgres_password
@@ -81,6 +81,7 @@ openssl rand -hex 32
 ```
 
 **対象ファイル:**
+- `setup/01_snowflake_base.sql` - N8N_ENCRYPTION_SECRET, N8N_JWT_SECRET
 - `n8n/n8n_spec.yaml` - secrets.encryption_key, secrets.jwt_secret
 - `.env.example` → `.env`
 
@@ -93,7 +94,7 @@ openssl rand -hex 32
 | Client Secret | (自動生成) | Security Integration作成後に取得 |
 
 **対象ファイル:**
-- `setup/02_snowflake_setup.sql` - `CREATE SECURITY INTEGRATION`
+- `setup/04_cortex_setup.sql` - `CREATE SECURITY INTEGRATION`
 - `n8n/n8n_workflow.json` - MCP接続設定
 
 ---
@@ -120,81 +121,38 @@ openssl rand -hex 32
 
 ## Step 1: Snowflake基盤セットアップ
 
-### 1.1 データベース・スキーマ作成
+> **実行ファイル: `setup/01_snowflake_base.sql`**
+
+このスクリプトで以下を作成します：
+- データベース・スキーマ
+- コンピュートプール
+- イメージリポジトリ
+- ステージ
+- Secrets
+- 外部アクセス統合
 
 ```sql
+-- 全体を実行するか、セクションごとに実行
 -- Snowsight または snow sql で実行
-CREATE DATABASE IF NOT EXISTS HELPDESK_DB;
-CREATE SCHEMA IF NOT EXISTS HELPDESK_DB.APP;
-CREATE SCHEMA IF NOT EXISTS HELPDESK_DB.SPCS;
 ```
 
-### 1.2 コンピュートプール作成
+### 1.1 事前準備
 
-```sql
-CREATE COMPUTE POOL IF NOT EXISTS HELPDESK_POOL
-    MIN_NODES = 1
-    MAX_NODES = 1
-    INSTANCE_FAMILY = CPU_X64_XS;
+```bash
+# n8n暗号化キー生成
+openssl rand -hex 32
 
--- 起動確認（IDLEになるまで待つ）
-SHOW COMPUTE POOLS LIKE 'HELPDESK_POOL';
+# n8n JWTシークレット生成
+openssl rand -hex 32
 ```
 
-### 1.3 イメージリポジトリ作成
+生成した値を`setup/01_snowflake_base.sql`のSecrets作成部分に反映してから実行します。
 
-```sql
-CREATE IMAGE REPOSITORY IF NOT EXISTS HELPDESK_DB.SPCS.N8N_REPO;
-CREATE IMAGE REPOSITORY IF NOT EXISTS HELPDESK_DB.SPCS.TICKET_APP_REPO;
+### 1.2 Secretの値を更新する場合
 
--- 確認
-SHOW IMAGE REPOSITORIES IN SCHEMA HELPDESK_DB.SPCS;
-```
-
-### 1.4 ステージ作成
-
-```sql
-CREATE STAGE IF NOT EXISTS HELPDESK_DB.SPCS.N8N_DATA DIRECTORY = (ENABLE = TRUE);
-CREATE STAGE IF NOT EXISTS HELPDESK_DB.SPCS.TICKET_APP_DATA DIRECTORY = (ENABLE = TRUE);
-```
-
-### 1.5 Snowflake Secrets作成
-
-> ⚠️ SPCSコンテナに機密情報を渡すために必要です。値は後で更新可能。
-
-```sql
--- Postgres接続情報（Step 2完了後に正しい値に更新）
-CREATE SECRET IF NOT EXISTS HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET
-  TYPE = GENERIC_STRING
-  SECRET_STRING = 'placeholder';
-
-CREATE SECRET IF NOT EXISTS HELPDESK_DB.SPCS.POSTGRES_USER_SECRET
-  TYPE = GENERIC_STRING
-  SECRET_STRING = 'helpdesk_admin';
-
-CREATE SECRET IF NOT EXISTS HELPDESK_DB.SPCS.POSTGRES_PASSWORD_SECRET
-  TYPE = PASSWORD
-  USERNAME = 'helpdesk_admin'
-  PASSWORD = '<your_postgres_password>';
-
--- n8n暗号化キー
-CREATE SECRET IF NOT EXISTS HELPDESK_DB.SPCS.N8N_ENCRYPTION_SECRET
-  TYPE = GENERIC_STRING
-  SECRET_STRING = '<openssl rand -hex 32 で生成>';
-
--- n8n JWTシークレット
-CREATE SECRET IF NOT EXISTS HELPDESK_DB.SPCS.N8N_JWT_SECRET
-  TYPE = GENERIC_STRING
-  SECRET_STRING = '<openssl rand -hex 32 で生成>';
-
--- 確認
-SHOW SECRETS IN SCHEMA HELPDESK_DB.SPCS;
-```
-
-**Secretの値を更新する場合:**
 ```sql
 ALTER SECRET HELPDESK_DB.SPCS.POSTGRES_HOST_SECRET
-  SET SECRET_STRING = 'helpdesk-postgres-xxxxx.snowflakecomputing.com';
+  SET SECRET_STRING = 'helpdesk-postgres-xxxxx.postgres.snowflake.app';
 ```
 
 ---
@@ -217,7 +175,7 @@ DESCRIBE POSTGRES INSTANCE helpdesk_postgres;
 ```
 
 **出力から以下をメモ:**
-- Host: `helpdesk-postgres-xxxxx.snowflakecomputing.com`
+- Host: `xxxxx.snowflakecomputing.com`
 - Port: `5432`
 
 ### 2.2 Secretsを更新
@@ -264,160 +222,78 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA app TO n8n_user;
 
 ## Step 3: External Volume & Iceberg（任意）
 
+> **実行ファイル: `setup/03_iceberg_setup.sql`**
+>
 > pg_lakeとIcebergを使う場合のみ実行
 
-### 3.1 S3バケット準備
+### 3.1 事前準備
 
-```bash
-# AWS CLIで作成
-aws s3 mb s3://helpdesk-iceberg-bucket
-```
+1. AWS S3バケット作成: `aws s3 mb s3://helpdesk-iceberg-bucket`
+2. IAMロール作成・権限設定
+3. `setup/03_iceberg_setup.sql`のプレースホルダーを更新
 
-### 3.2 IAMロール設定
-
-1. Snowflake用のIAMロールを作成
-2. S3バケットへのアクセス権限を付与
-3. Trust Policyを設定
-
-### 3.3 External Volume作成
+### 3.2 実行
 
 ```sql
-CREATE OR REPLACE EXTERNAL VOLUME helpdesk_iceberg_volume
-  STORAGE_LOCATIONS = (
-    (
-      NAME = 'helpdesk_s3'
-      STORAGE_PROVIDER = 'S3'
-      STORAGE_BASE_URL = 's3://helpdesk-iceberg-bucket/pgdata/helpdesk/'
-      STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::<account_id>:role/helpdesk-iceberg-role'
-    )
-  );
-
-DESC EXTERNAL VOLUME helpdesk_iceberg_volume;
-```
-
-### 3.4 Icebergテーブル作成
-
-```sql
-CREATE OR REPLACE ICEBERG TABLE HELPDESK_DB.APP.HELPDESK_TICKETS_ICE
-  EXTERNAL_VOLUME = 'helpdesk_iceberg_volume'
-  CATALOG = 'SNOWFLAKE'
-  BASE_LOCATION = 'helpdesk_db/public/helpdesk_tickets_iceberg';
-
-CREATE OR REPLACE ICEBERG TABLE HELPDESK_DB.APP.ASSET_MASTER_ICE
-  EXTERNAL_VOLUME = 'helpdesk_iceberg_volume'
-  CATALOG = 'SNOWFLAKE'
-  BASE_LOCATION = 'helpdesk_db/public/asset_master_iceberg';
-```
-
-### 3.5 統計ビュー作成
-
-```sql
--- 02_snowflake_setup.sql のセクション4を実行
--- TICKET_STATS_DAILY, TICKET_STATS_BY_LOCATION, TICKET_KPI_SUMMARY
+-- setup/03_iceberg_setup.sql を実行
+-- External Volume, Iceberg Tables, 統計ビューを作成
 ```
 
 ---
 
 ## Step 4: Cortex Search & Agent（任意）
 
+> **実行ファイル: `setup/04_cortex_setup.sql`**
+>
 > MCP Server経由でAI機能を使う場合に実行
 
-### 4.1 Cortex Search Service作成
-
 ```sql
-CREATE OR REPLACE CORTEX SEARCH SERVICE HELPDESK_DB.APP.ASSET_SEARCH_SERVICE
-  ON asset_search_text
-  ATTRIBUTES asset_id, asset_type, location, assigned_employee_name, status
-  WAREHOUSE = RYOSHIDA_WH
-  TARGET_LAG = '1 hour'
-AS (
-    SELECT 
-        asset_id, asset_type, device_name, assigned_employee_name,
-        location, status,
-        CONCAT('アセットID: ', asset_id, ' タイプ: ', asset_type, 
-               ' デバイス名: ', COALESCE(device_name, ''), 
-               ' 担当者: ', COALESCE(assigned_employee_name, '未割当'),
-               ' 場所: ', COALESCE(location, '不明'),
-               ' 説明: ', COALESCE(asset_description, '')) AS asset_search_text
-    FROM HELPDESK_DB.APP.ASSET_MASTER_ICE
-    WHERE status = 'ACTIVE'
-);
-```
-
-### 4.2 Cortex Agent作成
-
-```sql
--- 02_snowflake_setup.sql のセクション6を参照
-CREATE OR REPLACE CORTEX AGENT HELPDESK_DB.APP.HELPDESK_AGENT
-  MODEL = 'llama3.1-70b'
-  TOOLS = (HELPDESK_DB.APP.ASSET_SEARCH_SERVICE)
-  SYSTEM_PROMPT = '...';  -- 詳細は02_snowflake_setup.sqlを参照
-```
-
-### 4.3 MCP Server作成
-
-```sql
--- 02_snowflake_setup.sql のセクション7を参照
-CREATE OR REPLACE MCP SERVER HELPDESK_DB.APP.HELPDESK_MCP_SERVER
-  FROM SPECIFICATION $$
-    tools:
-      - name: "helpdesk-agent"
-        type: "CORTEX_AGENT_RUN"
-        ...
-  $$;
+-- setup/04_cortex_setup.sql を実行
+-- Cortex Search Service, Agent, MCP Server を作成
 ```
 
 ---
 
-## Step 5: 外部アクセス統合
+## Step 5: ナレッジベースセットアップ
+
+> **実行ファイル: `setup/05_knowledge_base.sql`**
 
 ```sql
-USE ROLE ACCOUNTADMIN;
-USE DATABASE HELPDESK_DB;
+-- setup/05_knowledge_base.sql を実行
+-- FAQテーブル、サンプルデータ、Cortex Search Serviceを作成
+```
 
--- Slack API
-CREATE OR REPLACE NETWORK RULE HELPDESK_DB.SPCS.SLACK_API_RULE
-  MODE = EGRESS
-  TYPE = HOST_PORT
-  VALUE_LIST = ('slack.com:443', '*.slack.com:443', 'hooks.slack.com:443');
+> **注意:** 外部アクセス統合（HELPDESK_EAI）は `setup/01_snowflake_base.sql` で既に作成されています。
 
--- Postgres接続用
-CREATE OR REPLACE NETWORK RULE HELPDESK_DB.SPCS.POSTGRES_RULE
-  MODE = EGRESS
-  TYPE = HOST_PORT
-  VALUE_LIST = ('*.snowflakecomputing.com:5432');
+---
 
--- Snowflake API用
-CREATE OR REPLACE NETWORK RULE HELPDESK_DB.SPCS.SNOWFLAKE_API_RULE
-  MODE = EGRESS
-  TYPE = HOST_PORT
-  VALUE_LIST = ('*.snowflakecomputing.com:443');
+## Step 6: SPCSデプロイ
 
--- 統合作成
-CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION EXTERNAL_ACCESS_N8N_EAI
-  ALLOWED_NETWORK_RULES = (
-    HELPDESK_DB.SPCS.SLACK_API_RULE,
-    HELPDESK_DB.SPCS.POSTGRES_RULE,
-    HELPDESK_DB.SPCS.SNOWFLAKE_API_RULE
-  )
-  ENABLED = TRUE;
+> **実行ファイル: `setup/06_spcs_deploy.sql`**
 
-GRANT USAGE ON INTEGRATION EXTERNAL_ACCESS_N8N_EAI TO ROLE SYSADMIN;
+### 6.0 事前確認
+
+```sql
+-- コンピュートプールがACTIVEか確認
+SHOW COMPUTE POOLS LIKE '%POOL';
+
+-- Secretsが設定されているか確認
+SHOW SECRETS IN SCHEMA HELPDESK_DB.SPCS;
 ```
 
 ---
 
-## Step 6: Dockerイメージのビルド・プッシュ
+## Step 7: Dockerイメージのビルド・プッシュ
 
 > 作業ディレクトリ: `/Users/ryoshida/Desktop/env/n8n/smart_helpdesk`
 
-### 6.1 レジストリにログイン
+### 7.1 レジストリにログイン
 
 ```bash
 snow spcs image-registry login --connection fsi_japan_connection
 ```
 
-### 6.2 n8nイメージ
+### 7.2 n8nイメージ
 
 ```bash
 cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk/n8n
@@ -429,7 +305,7 @@ docker build -t sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/s
 docker push sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/n8n_repo/n8n:latest
 ```
 
-### 6.3 ticket-appイメージ
+### 7.3 ticket-appイメージ
 
 ```bash
 cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk/ticket-app
@@ -441,7 +317,7 @@ docker build -t sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/s
 docker push sfseapac-fsi_japan.registry.snowflakecomputing.com/helpdesk_db/spcs/ticket_app_repo/ticket-app:latest
 ```
 
-### 6.4 イメージ確認
+### 7.4 イメージ確認
 
 ```sql
 -- Snowflakeで確認
@@ -451,7 +327,7 @@ CALL SYSTEM$REGISTRY_LIST_IMAGES('/HELPDESK_DB/SPCS/TICKET_APP_REPO');
 
 ---
 
-## Step 7: spec.yamlのアップロード
+## Step 8: spec.yamlのアップロード
 
 > 作業ディレクトリ: `/Users/ryoshida/Desktop/env/n8n/smart_helpdesk`
 
@@ -471,54 +347,48 @@ LIST @HELPDESK_DB.SPCS.TICKET_APP_DATA;
 
 ---
 
-## Step 8: SPCSサービス作成
+## Step 9: SPCSサービス作成
 
-### 8.1 n8nサービス
+> **実行ファイル: `setup/06_spcs_deploy.sql` のSTEP 4, 5**
 
 ```sql
+-- n8nサービス
 CREATE SERVICE IF NOT EXISTS HELPDESK_DB.SPCS.N8N_SVC
   IN COMPUTE POOL HELPDESK_POOL
   FROM @HELPDESK_DB.SPCS.N8N_DATA
   SPECIFICATION_FILE = 'n8n_spec.yaml'
-  EXTERNAL_ACCESS_INTEGRATIONS = (EXTERNAL_ACCESS_N8N_EAI);
+  EXTERNAL_ACCESS_INTEGRATIONS = (HELPDESK_EAI);
 
--- 状態確認（READYになるまで待つ）
-SELECT SYSTEM$GET_SERVICE_STATUS('HELPDESK_DB.SPCS.N8N_SVC');
-
--- エンドポイント取得
-SHOW ENDPOINTS IN SERVICE HELPDESK_DB.SPCS.N8N_SVC;
-```
-
-### 8.2 ticket-appサービス
-
-```sql
+-- ticket-appサービス
 CREATE SERVICE IF NOT EXISTS HELPDESK_DB.SPCS.TICKET_APP_SVC
-  IN COMPUTE POOL HELPDESK_POOL
+  IN COMPUTE POOL TICKET_APP_POOL
   FROM @HELPDESK_DB.SPCS.TICKET_APP_DATA
   SPECIFICATION_FILE = 'ticket_app_spec.yaml'
-  EXTERNAL_ACCESS_INTEGRATIONS = (EXTERNAL_ACCESS_N8N_EAI);
+  EXTERNAL_ACCESS_INTEGRATIONS = (HELPDESK_EAI);
 
 -- 状態確認
+SELECT SYSTEM$GET_SERVICE_STATUS('HELPDESK_DB.SPCS.N8N_SVC');
 SELECT SYSTEM$GET_SERVICE_STATUS('HELPDESK_DB.SPCS.TICKET_APP_SVC');
 
 -- エンドポイント取得
+SHOW ENDPOINTS IN SERVICE HELPDESK_DB.SPCS.N8N_SVC;
 SHOW ENDPOINTS IN SERVICE HELPDESK_DB.SPCS.TICKET_APP_SVC;
 ```
 
 ---
 
-## Step 9: Streamlitアプリ作成
+## Step 10: Streamlitアプリ作成
 
 > Snowsight上で分析ダッシュボードを表示
 
-### 9.1 ステージにアップロード
+### 10.1 ステージにアップロード
 
 ```bash
 # 作業ディレクトリから実行
 snow stage copy streamlit/streamlit_app.py @HELPDESK_DB.APP.STREAMLIT_STAGE --connection fsi_japan_connection --overwrite
 ```
 
-### 9.2 Streamlitアプリ作成
+### 10.2 Streamlitアプリ作成
 
 ```sql
 -- ステージ作成（まだない場合）
@@ -535,15 +405,15 @@ CREATE OR REPLACE STREAMLIT HELPDESK_DB.APP.HELPDESK_DASHBOARD
 SHOW STREAMLITS IN SCHEMA HELPDESK_DB.APP;
 ```
 
-### 9.3 アクセス
+### 10.3 アクセス
 
 Snowsight → Projects → Streamlit → HELPDESK_DASHBOARD
 
 ---
 
-## Step 10: 動作確認
+## Step 11: 動作確認
 
-### 10.1 エンドポイントにアクセス
+### 11.1 エンドポイントにアクセス
 
 ```
 n8n: https://<n8n_endpoint>.snowflakecomputing.app
@@ -551,9 +421,9 @@ ticket-app: https://<ticket_app_endpoint>.snowflakecomputing.app
 Streamlit: Snowsight内で実行
 ```
 
-### 10.2 n8n初回セットアップ
+### 11.2 n8n初回セットアップ
 
-#### 10.2.1 管理者アカウント作成
+#### 11.2.1 管理者アカウント作成
 
 1. n8n URLにアクセス
 2. 「Set up owner account」画面で以下を入力:
@@ -562,7 +432,7 @@ Streamlit: Snowsight内で実行
    - Password: 強力なパスワード
 3. 「Next」をクリック
 
-#### 10.2.2 基本設定
+#### 11.2.2 基本設定
 
 1. 右上のユーザーアイコン → **Settings**
 2. **General** タブで以下を設定:
@@ -570,9 +440,9 @@ Streamlit: Snowsight内で実行
      > ⚠️ これがないとWebhookが動作しない
 3. 「Save」をクリック
 
-### 10.3 Slack認証情報の設定
+### 11.3 Slack認証情報の設定
 
-#### 10.3.1 Credentials作成
+#### 11.3.1 Credentials作成
 
 1. 左メニュー → **Credentials**
 2. **Add Credential** → 検索で「Slack」→ **Slack API** を選択
@@ -586,7 +456,7 @@ Streamlit: Snowsight内で実行
 4. **Save** をクリック
 5. **Test** で接続確認
 
-#### 10.3.2 Slack App側の設定（Event Subscriptions）
+#### 11.3.2 Slack App側の設定（Event Subscriptions）
 
 1. https://api.slack.com/apps でAppを選択
 2. **Event Subscriptions** → Enable Events: **On**
@@ -600,7 +470,7 @@ Streamlit: Snowsight内で実行
    - `message.im`
 5. **Save Changes**
 
-### 10.4 ワークフローのインポート
+### 11.4 ワークフローのインポート
 
 1. 左メニュー → **Workflows**
 2. 右上の **⋮** メニュー → **Import from File**
@@ -617,11 +487,11 @@ Streamlit: Snowsight内で実行
 
 5. 各ノードをダブルクリックして Credential を再選択（必要に応じて）
 
-### 10.5 MCP Server接続設定（任意）
+### 11.5 MCP Server接続設定（任意）
 
 > Cortex Agent/Searchを使う場合のみ
 
-#### 10.5.1 OAuth認証情報の取得
+#### 11.5.1 OAuth認証情報の取得
 
 ```sql
 -- Snowflakeで実行（Step 4で作成したSecurity Integration）
@@ -632,7 +502,7 @@ SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('HELPDESK_MCP_OAUTH');
 - `OAUTH_CLIENT_ID`
 - `OAUTH_CLIENT_SECRET`
 
-#### 10.5.2 n8nでのMCP設定
+#### 11.5.2 n8nでのMCP設定
 
 1. ワークフロー内の **MCP - Cortex Agent** ノードをダブルクリック
 2. 以下を設定:
@@ -647,12 +517,12 @@ SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('HELPDESK_MCP_OAUTH');
 
 3. **MCP - Create Ticket** ノードも同様に設定
 
-### 10.6 ワークフローの有効化
+### 11.6 ワークフローの有効化
 
 1. ワークフロー画面右上の **Active** トグルを **ON**
 2. 「Workflow activated」と表示されればOK
 
-### 10.7 Slack連携テスト
+### 11.7 Slack連携テスト
 
 Slackで以下のメッセージを送信:
 ```
@@ -699,11 +569,11 @@ docker login sfseapac-fsi_japan.registry.snowflakecomputing.com
 
 ---
 
-## Step 11: AWS Lambda デプロイ
+## Step 12: AWS Lambda デプロイ
 
 > Slack連携のためのLambda関数をデプロイ
 
-### 11.1 ローカルファイル構成
+### 12.1 ローカルファイル構成
 
 ```
 smart_helpdesk/
@@ -714,7 +584,7 @@ smart_helpdesk/
     └── ...
 ```
 
-### 11.2 Lambda パッケージ作成
+### 12.2 Lambda パッケージ作成
 
 ```bash
 # 作業ディレクトリに移動
@@ -728,7 +598,7 @@ cp slack_app.py ./package/lambda_function.py && cd package && zip -r ../lambda_p
 ls -lh lambda_package.zip
 ```
 
-### 11.3 依存ライブラリのインストール（初回のみ）
+### 12.3 依存ライブラリのインストール（初回のみ）
 
 ```bash
 cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk
@@ -737,7 +607,7 @@ cd /Users/ryoshida/Desktop/env/n8n/smart_helpdesk
 pip install slack_sdk requests -t ./package/
 ```
 
-### 11.4 AWS Lambda へのアップロード
+### 12.4 AWS Lambda へのアップロード
 
 **AWS Console から:**
 1. AWS Console → Lambda → `smart-helpdesk-slack` 関数
@@ -752,7 +622,7 @@ aws lambda update-function-code \
   --zip-file fileb://lambda_package.zip
 ```
 
-### 11.5 Lambda 環境変数
+### 12.5 Lambda 環境変数
 
 | 変数名 | 説明 | 値 |
 |--------|------|-----|
@@ -762,7 +632,7 @@ aws lambda update-function-code \
 | `N8N_EVALUATION_URL` | 評価フロー用URL | `https://nqa4qd3u-sfseapac-fsi-japan.snowflakecomputing.app/webhook/helpdesk-evaluation` |
 | `SNOWFLAKE_PAT` | SPCS認証用PAT | N8N_USER用のProgrammatic Access Token |
 
-### 11.6 Lambda テスト
+### 12.6 Lambda テスト
 
 1. AWS Console → Lambda → `smart-helpdesk-slack`
 2. 「テスト」タブ → テストイベントを作成
@@ -777,14 +647,14 @@ aws lambda update-function-code \
 ```
 4. 「テスト」をクリック → `{"challenge": "test123"}` が返ればOK
 
-### 11.7 API Gateway 設定
+### 12.7 API Gateway 設定
 
 1. AWS Console → API Gateway → `smart-helpdesk-api`
 2. リソース: `/slack/events` (POST)
 3. 統合: Lambda関数 `smart-helpdesk-slack`
 4. エンドポイントURL: `https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/prod/slack/events`
 
-### 11.8 Slack App 設定
+### 12.8 Slack App 設定
 
 1. https://api.slack.com/apps でAppを選択
 2. **Event Subscriptions** → Enable Events: **On**
