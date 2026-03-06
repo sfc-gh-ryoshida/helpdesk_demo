@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { notifyStatusChange, notifyAssigneeChange, notifyNewComment } from "@/lib/slack";
 
 interface Ticket {
   ticket_id: string;
+  summary: string;
+  reporter_name: string;
+  urgency: string;
   status: string;
   assigned_to: string | null;
   resolution_notes: string | null;
+  thread_ts: string | null;
+  source_channel: string | null;
+}
+
+function getTable(ticketId: string): string {
+  return ticketId.startsWith("FIN-") ? "app.finance_tickets" : "app.helpdesk_tickets";
 }
 
 async function recordHistory(
@@ -16,11 +26,15 @@ async function recordHistory(
   author: string
 ) {
   if (oldValue !== newValue) {
-    await query(
-      `INSERT INTO app.ticket_history (ticket_id, action, field, old_value, new_value, author)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [ticketId, "変更", field, oldValue || "null", newValue || "null", author]
-    );
+    try {
+      await query(
+        `INSERT INTO app.ticket_history (ticket_id, action, field, old_value, new_value, author)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [ticketId, "変更", field, oldValue || "null", newValue || "null", author]
+      );
+    } catch (err) {
+      console.warn("recordHistory skipped (FK constraint):", ticketId, field);
+    }
   }
 }
 
@@ -30,8 +44,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const table = getTable(id);
     const tickets = await query(
-      `SELECT * FROM app.helpdesk_tickets WHERE ticket_id = $1`,
+      `SELECT * FROM ${table} WHERE ticket_id = $1`,
       [id]
     );
     if (tickets.length === 0) {
@@ -53,8 +68,9 @@ export async function PATCH(
     const body = await request.json();
     const { status, assigned_to, resolution_notes, author = "システム" } = body;
 
+    const table = getTable(id);
     const existing = await query<Ticket>(
-      `SELECT ticket_id, status, assigned_to, resolution_notes FROM app.helpdesk_tickets WHERE ticket_id = $1`,
+      `SELECT ticket_id, summary, reporter_name, urgency, status, assigned_to, resolution_notes, thread_ts, source_channel FROM ${table} WHERE ticket_id = $1`,
       [id]
     );
 
@@ -65,7 +81,7 @@ export async function PATCH(
     const oldTicket = existing[0];
 
     const result = await query<Ticket>(
-      `UPDATE app.helpdesk_tickets 
+      `UPDATE ${table} 
        SET status = COALESCE($1, status),
            assigned_to = COALESCE($2, assigned_to),
            resolution_notes = COALESCE($3, resolution_notes),
@@ -78,12 +94,29 @@ export async function PATCH(
 
     if (status && status !== oldTicket.status) {
       await recordHistory(id, "ステータス", oldTicket.status, status, author);
+      notifyStatusChange(
+        { ticket_id: id, summary: oldTicket.summary, reporter_name: oldTicket.reporter_name, urgency: oldTicket.urgency, thread_ts: oldTicket.thread_ts || undefined, source_channel: oldTicket.source_channel || undefined },
+        oldTicket.status,
+        status,
+        author
+      ).catch(err => console.error("Slack notification error:", err));
     }
     if (assigned_to !== undefined && assigned_to !== oldTicket.assigned_to) {
       await recordHistory(id, "担当者", oldTicket.assigned_to, assigned_to, author);
+      notifyAssigneeChange(
+        { ticket_id: id, summary: oldTicket.summary, reporter_name: oldTicket.reporter_name, urgency: oldTicket.urgency, thread_ts: oldTicket.thread_ts || undefined, source_channel: oldTicket.source_channel || undefined },
+        oldTicket.assigned_to,
+        assigned_to,
+        author
+      ).catch(err => console.error("Slack notification error:", err));
     }
     if (resolution_notes !== undefined && resolution_notes !== oldTicket.resolution_notes) {
       await recordHistory(id, "対応メモ", oldTicket.resolution_notes, resolution_notes, author);
+      notifyNewComment(
+        { ticket_id: id, summary: oldTicket.summary, reporter_name: oldTicket.reporter_name, urgency: oldTicket.urgency, thread_ts: oldTicket.thread_ts || undefined, source_channel: oldTicket.source_channel || undefined },
+        author,
+        resolution_notes || ""
+      ).catch(err => console.error("Slack notification error:", err));
     }
 
     return NextResponse.json(result[0]);

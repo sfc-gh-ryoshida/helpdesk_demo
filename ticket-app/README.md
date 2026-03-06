@@ -39,6 +39,8 @@ http://localhost:3001 でアクセス
 | POSTGRES_USER | ユーザー | snowflake_admin |
 | POSTGRES_PASSWORD | パスワード | （秘密） |
 | POSTGRES_SSL | SSL有効化 | true |
+| SLACK_BOT_TOKEN | Slack Bot Token | xoxb-xxxx |
+| SLACK_DEFAULT_CHANNEL | Slack通知先チャネル名 | ryoshida-demo_helpdesk-request |
 
 ## 機能
 
@@ -52,6 +54,12 @@ http://localhost:3001 でアクセス
 
 ### 主な機能
 - **マルチカテゴリ対応**: サイドバーでIT/人事/経理を切り替え
+- **Slack通知連携**: ステータス変更/担当者変更/対応メモ更新時にSlackスレッドへ通知
+- **エスカレーション**: ワンクリックでESCALATEDステータスに変更
+- **コメント機能**: チケットへのコメント追加・閲覧
+- **変更履歴**: ステータス/担当者/対応メモの変更履歴記録
+- **SLAインジケーター**: 緊急度に応じた対応時間の可視化
+- **類似ナレッジ検索**: Cortex Searchによる類似事例検索
 - ダークモード切替
 - 30秒自動更新
 - チケット検索（ID/報告者/要約）

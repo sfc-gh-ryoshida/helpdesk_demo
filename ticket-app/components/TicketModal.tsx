@@ -648,7 +648,18 @@ export function TicketModal({ ticket, onClose, onUpdate }: TicketModalProps) {
           <Button variant="outline" onClick={onClose}>
             キャンセル
           </Button>
-          <Button variant="secondary">
+          <Button variant="secondary" onClick={async () => {
+            setSaving(true);
+            try {
+              await onUpdate(ticket.ticket_id, {
+                status: "ESCALATED",
+                assigned_to: assignedTo === "none" ? "" : assignedTo,
+                resolution_notes: notes,
+              });
+            } finally {
+              setSaving(false);
+            }
+          }} disabled={saving}>
             エスカレーション
           </Button>
           <Button onClick={handleSave} disabled={saving}>

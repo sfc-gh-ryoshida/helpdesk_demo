@@ -46,6 +46,7 @@ Slack経由で受け付けた問い合わせをCortex Agentで処理し、その
 | グラフ | Recharts |
 | テーマ | next-themes |
 | 通知 | sonner |
+| Slack連携 | Slack Web API (chat.postMessage) |
 | **Node.js** | **>= v18.17.0 必須** (推奨: v22.16.0) |
 
 ### ディレクトリ構成
@@ -57,23 +58,41 @@ ticket-app/
 │   │   ├── tickets/
 │   │   │   ├── route.ts          # GET: チケット一覧（検索・ページネーション対応）
 │   │   │   └── [id]/
-│   │   │       └── route.ts      # GET/PATCH: チケット詳細・更新
+│   │   │       ├── route.ts      # GET/PATCH: チケット詳細・更新（マルチテーブル対応）
+│   │   │       ├── comments/
+│   │   │       │   └── route.ts  # GET/POST: コメント取得・追加
+│   │   │       └── history/
+│   │   │           └── route.ts  # GET: 変更履歴取得
+│   │   ├── finance/tickets/
+│   │   │   └── route.ts          # GET: 経理チケット一覧
+│   │   ├── hr/tickets/
+│   │   │   └── route.ts          # GET: 人事チケット一覧
+│   │   ├── similar/
+│   │   │   └── route.ts          # GET: 類似ナレッジ検索（Cortex Search）
 │   │   └── logs/
 │   │       └── route.ts          # GET: ログ一覧取得
 │   ├── analytics/
 │   │   └── page.tsx              # 分析ダッシュボード（Recharts）
+│   ├── finance/
+│   │   └── page.tsx              # 経理チケット一覧
+│   ├── hr/
+│   │   └── page.tsx              # 人事チケット一覧
 │   ├── logs/
 │   │   └── page.tsx              # 対話ログページ
-│   ├── layout.tsx                # ルートレイアウト（ThemeProvider）
-│   ├── page.tsx                  # メインページ（チケット一覧）
+│   ├── layout.tsx                # ルートレイアウト（ThemeProvider + Sidebar）
+│   ├── page.tsx                  # メインページ（ITチケット一覧）
 │   └── globals.css               # グローバルスタイル
 ├── components/
 │   ├── ui/                       # shadcn/ui コンポーネント
+│   ├── tickets/
+│   │   └── TicketList.tsx        # 共通チケット一覧コンポーネント
 │   ├── theme-provider.tsx        # ダークモードプロバイダー
 │   ├── theme-toggle.tsx          # テーマ切替ボタン
-│   └── TicketModal.tsx           # チケット詳細モーダル
+│   ├── TicketModal.tsx           # チケット詳細モーダル（5タブ構成）
+│   └── SLAIndicator.tsx          # SLA表示コンポーネント
 ├── lib/
 │   ├── db.ts                     # PostgreSQL接続
+│   ├── slack.ts                  # Slack通知連携
 │   └── utils.ts                  # ユーティリティ関数
 ├── package.json
 └── tsconfig.json
@@ -118,31 +137,49 @@ ticket-app/
 #### 表示項目
 | カラム | 説明 |
 |--------|------|
-| ID | チケットID (TKT-YYYYMMDD-HHMMSS形式) |
+| ID | チケットID (TKT-/FIN-/HR- プレフィックス) |
 | 報告者 | reporter_name |
 | 場所 | location |
 | 種別 | issue_type (Badge表示) |
 | 緊急度 | urgency: HIGH/MEDIUM/LOW (色分けBadge) |
 | 要約 | summary (truncate) |
-| ステータス | OPEN/IN_PROGRESS/RESOLVED/CLOSED |
+| ステータス | OPEN/IN_PROGRESS/RESOLVED/CLOSED/ESCALATED |
+| SLA | SLAインジケーター（緊急度に応じた対応時間） |
 | 担当者 | assigned_to |
 | 作成日 | created_at |
 
 #### フィルタ
-- ステータス: 全ステータス / OPEN / IN_PROGRESS / RESOLVED / CLOSED
+- ステータス: 全ステータス / OPEN / IN_PROGRESS / RESOLVED / CLOSED / ESCALATED
 - 緊急度: 全緊急度 / HIGH / MEDIUM / LOW
 
-### 2. チケット詳細モーダル
+### 2. チケット詳細モーダル（5タブ構成）
 
-#### 機能
-- チケットの詳細情報表示
-- 関連する会話履歴の表示（thread_tsでログ取得）
-- ステータス・担当者・対応メモの編集・保存
+#### タブ構成
+| タブ | 内容 |
+|------|------|
+| 詳細 | チケット情報表示・ステータス/担当者/対応メモ編集 |
+| コメント | チケットへのコメント追加・閲覧 |
+| 履歴 | ステータス・担当者・対応メモの変更履歴 |
+| 会話 | Slackスレッドの会話履歴（thread_ts紐付け） |
+| 類似 | Cortex Searchによる類似ナレッジ検索（IT/経理/人事切替） |
 
 #### 編集可能項目
-- ステータス（プルダウン）
+- ステータス（プルダウン: OPEN / IN_PROGRESS / RESOLVED / CLOSED / ESCALATED）
 - 担当者（プルダウン：高橋美咲、田中太郎、佐藤花子）
 - 対応メモ（テキストエリア）
+
+#### アクションボタン
+| ボタン | 動作 |
+|--------|------|
+| エスカレーション | ステータスをESCALATEDに変更して保存 |
+| 保存 | 変更内容を保存（ステータス/担当者/対応メモ） |
+| キャンセル | モーダルを閉じる |
+
+#### Slack通知連携
+チケット更新時に、元のSlackスレッドにリプライとして通知を送信（非同期・fire-and-forget）：
+- **ステータス変更**: ステータス遷移を通知（絵文字付き）
+- **担当者変更**: 新旧担当者を通知
+- **対応メモ更新**: メモ内容をSlackスレッドに投稿
 
 ### 3. 対話ログページ (`/logs`)
 
@@ -201,16 +238,54 @@ ticket-app/
 
 ### PATCH /api/tickets/[id]
 
-チケットを更新
+チケットを更新（マルチテーブル対応: TKT-→helpdesk_tickets, FIN-→finance_tickets）
 
 #### リクエストボディ
 ```json
 {
   "status": "RESOLVED",
   "assigned_to": "担当者名",
-  "resolution_notes": "対応内容"
+  "resolution_notes": "対応内容",
+  "author": "変更者名"
 }
 ```
+
+#### 副作用
+- `app.ticket_history` に変更履歴を記録（helpdesk_ticketsのみ、FK制約）
+- ステータス変更時: Slack通知送信
+- 担当者変更時: Slack通知送信
+- 対応メモ変更時: Slack通知送信
+
+### GET /api/tickets/[id]/comments
+
+チケットのコメント一覧を取得
+
+### POST /api/tickets/[id]/comments
+
+チケットにコメントを追加
+
+#### リクエストボディ
+```json
+{
+  "author": "コメント者",
+  "content": "コメント内容"
+}
+```
+
+### GET /api/tickets/[id]/history
+
+チケットの変更履歴を取得
+
+### GET /api/similar
+
+類似ナレッジを検索（Cortex Search）
+
+#### クエリパラメータ
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| query | string | 検索クエリ |
+| category | string | カテゴリ (it/finance/hr) |
+| limit | number | 取得件数 |
 
 ### GET /api/logs
 
@@ -237,7 +312,7 @@ ticket-app/
 | POSTGRES_PASSWORD | パスワード |
 | POSTGRES_SSL | SSL有効化 ("true") |
 
-### テーブル: app.helpdesk_tickets
+### テーブル: app.helpdesk_tickets (プレフィックス: TKT-)
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | ticket_id | VARCHAR(50) | PK, チケットID |
@@ -258,6 +333,35 @@ ticket-app/
 | created_at | TIMESTAMP | 作成日時 |
 | updated_at | TIMESTAMP | 更新日時 |
 | resolved_at | TIMESTAMP | 解決日時 |
+
+### テーブル: app.finance_tickets (プレフィックス: FIN-)
+
+helpdesk_ticketsと同一スキーマ。経理カテゴリのチケットを格納。
+
+### テーブル: app.hr_tickets (プレフィックス: HR-)
+
+helpdesk_ticketsと同一スキーマ。人事カテゴリのチケットを格納。
+
+### テーブル: app.ticket_history
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | SERIAL | PK |
+| ticket_id | VARCHAR(50) | FK→helpdesk_tickets |
+| action | VARCHAR(50) | アクション種別（変更/作成） |
+| field | VARCHAR(100) | 変更フィールド名 |
+| old_value | TEXT | 変更前の値 |
+| new_value | TEXT | 変更後の値 |
+| author | VARCHAR(255) | 変更者 |
+| created_at | TIMESTAMP | 作成日時 |
+
+### テーブル: app.ticket_comments
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | SERIAL | PK |
+| ticket_id | VARCHAR(50) | チケットID |
+| author | VARCHAR(255) | コメント者 |
+| content | TEXT | コメント内容 |
+| created_at | TIMESTAMP | 作成日時 |
 
 ### テーブル: app.helpdesk_logs
 | カラム | 型 | 説明 |
@@ -314,6 +418,13 @@ ticket-app/
 6. **分析ダッシュボード** - Recharts (LineChart, PieChart, BarChart)
 7. **検索機能** - ILIKE検索
 8. **ページネーション** - 10件/ページ
+9. **コメント機能** - チケットへのコメント追加・閲覧
+10. **変更履歴** - ステータス/担当者/対応メモの変更履歴記録・表示
+11. **SLAインジケーター** - 緊急度に応じた対応時間の可視化
+12. **類似ナレッジ検索** - Cortex Search連携（IT/経理/人事カテゴリ切替）
+13. **Slack通知連携** - ステータス変更/担当者変更/対応メモ更新時にSlackスレッドへ通知
+14. **エスカレーションボタン** - ワンクリックでESCALATEDステータスに変更
+15. **マルチテーブルルーティング** - チケットIDプレフィックスによる自動テーブル振り分け（TKT-/FIN-/HR-）
 
 ### 🟡 今後の改善候補
 
@@ -328,15 +439,14 @@ ticket-app/
 #### 12. キーボードショートカット
 - Escでモーダル閉じる等
 
-#### 13. 通知機能
-- 高緊急度チケット発生時のブラウザ通知
-- 担当者アサイン時のSlack通知
+#### 13. ブラウザ通知
+- 高緊急度チケット発生時のブラウザプッシュ通知
 
 #### 14. エクスポート機能
 - CSV/Excel形式でのチケットエクスポート
 
-#### 15. 監査ログ
-- 誰がいつ何を変更したかの履歴
+#### 15. 監査ログ強化
+- finance_tickets/hr_ticketsの変更履歴対応（現在はhelpdesk_ticketsのみFK制約あり）
 
 #### 16. SLAトラッキング
 - 対応時間の計測
@@ -417,6 +527,8 @@ POSTGRES_DB=postgres
 POSTGRES_USER=snowflake_admin
 POSTGRES_PASSWORD=xxxxx
 POSTGRES_SSL=true
+SLACK_BOT_TOKEN=xoxb-xxxx（Slack Bot Token）
+SLACK_DEFAULT_CHANNEL=ryoshida-demo_helpdesk-request（通知先チャネル名）
 ```
 
 ### ビルド
@@ -430,10 +542,11 @@ npm run start
 ## 次のステップ
 
 1. React Query導入でデータフェッチ最適化
-2. サイドバーナビゲーション追加
-3. レスポンシブデザイン対応
-4. キーボードショートカット
-5. エクスポート機能（CSV）
+2. レスポンシブデザイン対応
+3. キーボードショートカット
+4. エクスポート機能（CSV）
+5. ticket_historyのFK制約をfinance_tickets/hr_ticketsにも対応
+6. Slack通知のBlock Kit対応（リッチメッセージ）
 
 ---
 
@@ -446,3 +559,4 @@ npm run start
 | 2026-03-04 | 2.0.0 | shadcn/ui, ダークモード, 分析ページ, 検索, ページネーション実装 |
 | 2026-03-05 | 2.1.0 | マルチカテゴリ対応（IT/人事/経理）、サイドバー追加 |
 | 2026-03-05 | 2.1.1 | Node.jsバージョン要件追記、レイアウト修正 |
+| 2026-03-06 | 3.0.0 | Slack通知連携、エスカレーションボタン、コメント機能、変更履歴、SLAインジケーター、類似ナレッジ検索、マルチテーブルルーティング |
