@@ -6,15 +6,12 @@
 
 **アーキテクチャ**:
 ```
-Slack → n8n(SPCS) → MCP Server → Cortex Agent/Search
-                        ↓
-              Snowflake Postgres (チケット保存)
-                        ↓ pg_lake
-                  S3 (Iceberg形式)
-                        ↓
-              Snowflake Iceberg Table
-                        ↓
-                Streamlit Dashboard
+Slack → AWS Lambda (slack_app.py) → n8n(SPCS) → Cortex Agent/Search
+       (カテゴリ選択ボタン)      (4 Workflows)    (3 Agents / 4 Search)
+                                      ↓
+                            Snowflake Postgres (チケット保存)
+                                      ↓
+                                Ticket App (Next.js)
 ```
 
 ---
@@ -132,19 +129,30 @@ CREATE STREAMLIT HELPDESK_DB.APP.HELPDESK_DASHBOARD
 > 第3倉庫の田中です。スキャナー落として画面割れちゃいました
 
 **期待される動作**:
-1. n8nがメッセージを受信
-2. MCP Server経由でCortex Agentが解析
-3. Cortex Searchで端末情報を検索（DEV-00123を特定）
-4. 構造化されたJSONを生成
-5. Postgresにチケット登録
-6. Slackに自動返信
+1. Lambdaがメッセージを受信
+2. Slackにカテゴリ選択ボタンを表示（IT/人事/経理/その他）
+3. ユーザーが「IT」を選択
+4. Lambdaがn8n IT AgentにWebhook送信
+5. Cortex Agentが解析・Cortex Searchで端末情報を検索
+6. Postgresにチケット登録
+7. SlackにAI回答 + フィードバックボタンを返信
 
 **確認項目**:
 - チケットIDが発行されているか
 - 端末IDが正しくマッチしているか
 - 緊急度が適切か（HARDWARE → MEDIUM）
 
-### シナリオ2: 高緊急度対応
+### シナリオ2: 経理問い合わせ
+
+**Slackで送信**:
+> 今月の出張費の経費精算について教えてください
+
+**期待される動作**:
+1. カテゴリ選択で「経理」をクリック
+2. Finance Agentが経理ナレッジベースを検索
+3. FIN-プレフィックスのチケットが作成される
+
+### シナリオ3: 高緊急度対応
 
 **Slackで送信**:
 > 緊急！WMSが全社的に使えなくなりました！出荷作業が完全に止まっています！

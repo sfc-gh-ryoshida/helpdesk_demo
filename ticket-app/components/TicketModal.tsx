@@ -85,7 +85,7 @@ interface TicketModalProps {
   onUpdate: (ticketId: string, data: Partial<Ticket>) => Promise<void>;
 }
 
-const statusOptions = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED", "ESCALATED"];
+const statusOptions = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED", "ESCALATED", "HUMAN_REQUESTED"];
 const assigneeOptions = ["高橋美咲", "田中太郎", "佐藤花子"];
 
 function getCategoryFromTicketId(ticketId: string): string {

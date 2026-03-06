@@ -54,6 +54,61 @@
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "is-direct-ticket", "leftValue": "={{ $('Parse Value').first().json.evaluation }}", "rightValue": "direct_ticket", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-direct-ticket",
+      "name": "Direct Ticket?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse Value').first().json;\nconst category = (data.category || 'it').toLowerCase();\n\nlet tableName = 'app.helpdesk_tickets';\nif (category === 'hr') tableName = 'app.hr_tickets';\nelse if (category === 'finance') tableName = 'app.finance_tickets';\n\nreturn {\n  json: {\n    ...data,\n    tableName\n  }\n};"
+      },
+      "id": "get-table-direct",
+      "name": "Get Table Name (Direct)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE app.helpdesk_logs SET status = 'HUMAN_REQUESTED' WHERE id = {{ $json.log_id }};\nUPDATE {{ $json.tableName }} SET status = 'HUMAN_REQUESTED', urgency = 'LOW' WHERE ticket_id = '{{ $json.ticket_id }}';",
+        "options": {}
+      },
+      "id": "update-direct",
+      "name": "Update Status (Direct)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [600, -200],
+      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":pencil: *有人対応依頼*\\n\\nチケット `{{ $('Parse Value').first().json.ticket_id }}` を有人対応として登録しました。\\n担当者が確認次第、ご連絡いたします。\"\n}",
+        "options": {}
+      },
+      "id": "slack-direct",
+      "name": "Slack - Direct Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
           "conditions": [{ "id": "is-escalate", "leftValue": "={{ $('Parse Value').first().json.evaluation }}", "rightValue": "escalate", "operator": { "type": "string", "operation": "equals" } }],
           "combinator": "or"
         },
@@ -63,7 +118,7 @@
       "name": "Escalate?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [200, 0]
+      "position": [400, 100]
     },
     {
       "parameters": {
@@ -73,7 +128,7 @@
       "name": "Get Table Name",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, -100]
+      "position": [600, 0]
     },
     {
       "parameters": {
@@ -85,7 +140,7 @@
       "name": "Update Status (Escalate)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [600, -100],
+      "position": [800, 0],
       "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
     },
     {
@@ -103,7 +158,7 @@
       "name": "Slack - Escalation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, -100]
+      "position": [1000, 0]
     },
     {
       "parameters": {
@@ -113,7 +168,7 @@
       "name": "Get Table Name (Resolved)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 100]
+      "position": [600, 200]
     },
     {
       "parameters": {
@@ -125,7 +180,7 @@
       "name": "Update Status (Resolved)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [600, 100],
+      "position": [800, 200],
       "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
     },
     {
@@ -143,14 +198,17 @@
       "name": "Slack - Resolved",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, 100]
+      "position": [1000, 200]
     }
   ],
   "connections": {
     "Webhook - Evaluation": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
     "Respond": { "main": [[{ "node": "Parse Value", "type": "main", "index": 0 }]] },
     "Parse Value": { "main": [[{ "node": "Log Evaluation", "type": "main", "index": 0 }]] },
-    "Log Evaluation": { "main": [[{ "node": "Escalate?", "type": "main", "index": 0 }]] },
+    "Log Evaluation": { "main": [[{ "node": "Direct Ticket?", "type": "main", "index": 0 }]] },
+    "Direct Ticket?": { "main": [[{ "node": "Get Table Name (Direct)", "type": "main", "index": 0 }], [{ "node": "Escalate?", "type": "main", "index": 0 }]] },
+    "Get Table Name (Direct)": { "main": [[{ "node": "Update Status (Direct)", "type": "main", "index": 0 }]] },
+    "Update Status (Direct)": { "main": [[{ "node": "Slack - Direct Ticket", "type": "main", "index": 0 }]] },
     "Escalate?": { "main": [[{ "node": "Get Table Name", "type": "main", "index": 0 }], [{ "node": "Get Table Name (Resolved)", "type": "main", "index": 0 }]] },
     "Get Table Name": { "main": [[{ "node": "Update Status (Escalate)", "type": "main", "index": 0 }]] },
     "Update Status (Escalate)": { "main": [[{ "node": "Slack - Escalation", "type": "main", "index": 0 }]] },
