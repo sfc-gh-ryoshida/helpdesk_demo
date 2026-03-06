@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { notifyNewComment } from "@/lib/slack";
 
 export interface Comment {
   id: number;
@@ -7,6 +8,16 @@ export interface Comment {
   author: string;
   content: string;
   created_at: string;
+}
+
+interface Ticket {
+  ticket_id: string;
+  summary: string;
+  reporter_name: string;
+  status: string;
+  assigned_to: string | null;
+  thread_ts: string | null;
+  source_channel: string | null;
 }
 
 export async function GET(
@@ -54,6 +65,22 @@ export async function POST(
        RETURNING id, ticket_id, author, content, created_at`,
       [id, author, content]
     );
+
+    const ticketInfo = await query<Ticket>(
+      `SELECT ticket_id, summary, reporter_name, status, assigned_to, thread_ts, source_channel FROM app.helpdesk_tickets WHERE ticket_id = $1`,
+      [id]
+    );
+
+    if (ticketInfo.length > 0) {
+      const ticket = ticketInfo[0];
+      if (ticket.assigned_to && author === ticket.assigned_to) {
+        notifyNewComment(
+          { ticket_id: id, summary: ticket.summary, reporter_name: ticket.reporter_name, status: ticket.status, thread_ts: ticket.thread_ts || undefined, source_channel: ticket.source_channel || undefined },
+          author,
+          content
+        ).catch(err => console.error("Slack notification error:", err));
+      }
+    }
 
     return NextResponse.json(result[0], { status: 201 });
   } catch (error) {
