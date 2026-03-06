@@ -474,16 +474,20 @@ Streamlit: Snowsight内で実行
 
 1. 左メニュー → **Workflows**
 2. 右上の **⋮** メニュー → **Import from File**
-3. `n8n/n8n_workflow.json` を選択
-4. インポート後、各ノードを確認:
+3. `n8n_workflows/` ディレクトリ内の以下5ファイルをそれぞれインポート:
+   - `IT_Helpdesk_Agent.json`
+   - `Finance_Helpdesk_Agent.json`
+   - `HR_Helpdesk_Agent.json`
+   - `General_Helpdesk_Agent.json`
+   - `Helpdesk_Evaluation_Handler.json`
+4. インポート後、各ワークフローの以下を確認:
 
 | ノード | 確認項目 |
 |--------|----------|
-| Slack Trigger | Credential が「Slack Bot」になっているか |
-| MCP - Cortex Agent | サーバーURLが正しいか |
-| MCP - Create Ticket | サーバーURLが正しいか |
-| Slack Reply | Credential が「Slack Bot」になっているか |
-| Slack Alert | Credential が「Slack Bot」になっているか |
+| Webhook | URLが正しいか |
+| Cortex Agent | Credentialが「Snowflake account」になっているか |
+| Postgresノード | Credentialが「Postgres account」になっているか |
+| Slack - AI Response | Bot Tokenが正しいか |
 
 5. 各ノードをダブルクリックして Credential を再選択（必要に応じて）
 
@@ -519,8 +523,8 @@ SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('HELPDESK_MCP_OAUTH');
 
 ### 11.6 ワークフローの有効化
 
-1. ワークフロー画面右上の **Active** トグルを **ON**
-2. 「Workflow activated」と表示されればOK
+1. 各ワークフロー画面右上の **Active** トグルを **ON**
+2. 5つ全てのワークフローを有効化すること
 
 ### 11.7 Slack連携テスト
 

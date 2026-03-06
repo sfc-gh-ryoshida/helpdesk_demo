@@ -15,7 +15,6 @@ app = App(
 )
 
 N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL")
-# N8N_EVALUATION_URL is now derived from N8N_WEBHOOK_URL + "/webhook/helpdesk-evaluation"
 SNOWFLAKE_PAT = os.environ.get("SNOWFLAKE_PAT")
 
 CATEGORY_CONFIG = {
@@ -40,8 +39,6 @@ CATEGORY_CONFIG = {
         "description": "上記以外のお問い合わせ"
     }
 }
-
-pending_inquiries = {}
 
 BOT_USER_ID = None
 try:
@@ -90,15 +87,21 @@ def show_category_selection(event: dict, say, client):
     except Exception:
         user_name = user_id
     
-    pending_key = f"{channel_id}:{thread_ts}"
-    pending_inquiries[pending_key] = {
-        "channel_id": channel_id,
-        "thread_ts": thread_ts,
-        "user_id": user_id,
-        "user_name": user_name,
-        "message": text,
-        "event_ts": event.get("ts")
-    }
+    event_ts = event.get("ts")
+    
+    def make_value(category, msg=text):
+        val = json.dumps({
+            "channel_id": channel_id,
+            "thread_ts": thread_ts,
+            "user_id": user_id,
+            "user_name": user_name,
+            "message": msg,
+            "event_ts": event_ts,
+            "category": category
+        }, ensure_ascii=False, separators=(',', ':'))
+        if len(val.encode('utf-8')) > 2000:
+            return make_value(category, msg[:len(msg)//2])
+        return val
     
     blocks = [
         {
@@ -114,25 +117,25 @@ def show_category_selection(event: dict, say, client):
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "💻 IT・資産", "emoji": True},
-                    "value": f"{pending_key}|it_asset",
+                    "value": make_value("it_asset"),
                     "action_id": "category_it_asset"
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "👤 人事", "emoji": True},
-                    "value": f"{pending_key}|hr",
+                    "value": make_value("hr"),
                     "action_id": "category_hr"
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "💰 経理", "emoji": True},
-                    "value": f"{pending_key}|finance",
+                    "value": make_value("finance"),
                     "action_id": "category_finance"
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": "❓ その他", "emoji": True},
-                    "value": f"{pending_key}|other",
+                    "value": make_value("other"),
                     "action_id": "category_other"
                 }
             ]
@@ -141,15 +144,21 @@ def show_category_selection(event: dict, say, client):
     
     say(text="カテゴリを選択してください", blocks=blocks, thread_ts=thread_ts)
 
-def process_inquiry_with_category(pending_key: str, category: str, say, client, channel_id: str, message_ts: str):
-    inquiry = pending_inquiries.pop(pending_key, None)
-    if not inquiry:
-        logger.warning(f"No pending inquiry found for key: {pending_key}")
+def process_inquiry_with_category(body, client):
+    value_str = body.get("actions", [{}])[0].get("value", "{}")
+    try:
+        inquiry = json.loads(value_str)
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse category button value: {value_str}")
         return
     
+    category = inquiry.pop("category", "other")
     config = CATEGORY_CONFIG.get(category, CATEGORY_CONFIG["other"])
     base_url = N8N_WEBHOOK_URL.rsplit("/webhook", 1)[0] if N8N_WEBHOOK_URL else ""
     webhook_url = base_url + config["webhook_path"]
+    
+    channel_id = body.get("channel", {}).get("id")
+    message_ts = body.get("message", {}).get("ts")
     
     client.chat_update(
         channel=channel_id,
@@ -178,7 +187,7 @@ def process_inquiry_with_category(pending_key: str, category: str, say, client, 
     except Exception as e:
         client.chat_postMessage(
             channel=channel_id,
-            thread_ts=inquiry["thread_ts"],
+            thread_ts=inquiry.get("thread_ts", ""),
             text=f"⚠️ エラーが発生しました: {str(e)}"
         )
 
@@ -400,41 +409,82 @@ def handle_escalate(ack, body, client):
     except Exception as e:
         logger.error(f"Failed to send escalate to n8n: {e}")
 
+@app.action("direct_ticket")
+def handle_direct_ticket(ack, body, client):
+    ack()
+    value_str = body.get("actions", [{}])[0].get("value", "{}")
+    try:
+        value_data = json.loads(value_str)
+        log_id = value_data.get("log_id")
+        ticket_id = value_data.get("ticket_id", "")
+        category = value_data.get("category", "it")
+    except json.JSONDecodeError:
+        log_id = value_str
+        ticket_id = ""
+        category = "it"
+    
+    user_id = body.get("user", {}).get("id")
+    channel_id = body.get("channel", {}).get("id")
+    message_ts = body.get("message", {}).get("ts")
+    thread_ts = body.get("message", {}).get("thread_ts") or message_ts
+    original_blocks = body.get("message", {}).get("blocks", [])
+    
+    logger.info(f"Direct ticket clicked: log_id={log_id}, ticket_id={ticket_id}, category={category}, user={user_id}")
+    
+    updated_blocks = [b for b in original_blocks if b.get("type") != "actions"]
+    updated_blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": f"📝 *有人対応依頼* | <@{user_id}> が有人対応を依頼しました"}]
+    })
+    
+    original_text = body.get("message", {}).get("text", "AI応答")
+    
+    client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        text=original_text,
+        blocks=updated_blocks
+    )
+    
+    base_url = N8N_WEBHOOK_URL.rsplit("/webhook", 1)[0] if N8N_WEBHOOK_URL else ""
+    evaluation_url = base_url + "/webhook/helpdesk-evaluation"
+    
+    payload = {
+        "value": value_str,
+        "log_id": log_id,
+        "ticket_id": ticket_id,
+        "category": category,
+        "user_id": user_id,
+        "channel_id": channel_id,
+        "thread_ts": thread_ts,
+        "evaluation": "direct_ticket",
+        "comment": ""
+    }
+    
+    try:
+        send_to_n8n(payload, evaluation_url)
+    except Exception as e:
+        logger.error(f"Failed to send direct_ticket to n8n: {e}")
+
 @app.action("category_it_asset")
 def handle_category_it_asset(ack, body, client, say):
     ack()
-    value = body.get("actions", [{}])[0].get("value", "")
-    pending_key, category = value.rsplit("|", 1)
-    channel_id = body.get("channel", {}).get("id")
-    message_ts = body.get("message", {}).get("ts")
-    process_inquiry_with_category(pending_key, "it_asset", say, client, channel_id, message_ts)
+    process_inquiry_with_category(body, client)
 
 @app.action("category_hr")
 def handle_category_hr(ack, body, client, say):
     ack()
-    value = body.get("actions", [{}])[0].get("value", "")
-    pending_key, category = value.rsplit("|", 1)
-    channel_id = body.get("channel", {}).get("id")
-    message_ts = body.get("message", {}).get("ts")
-    process_inquiry_with_category(pending_key, "hr", say, client, channel_id, message_ts)
+    process_inquiry_with_category(body, client)
 
 @app.action("category_finance")
 def handle_category_finance(ack, body, client, say):
     ack()
-    value = body.get("actions", [{}])[0].get("value", "")
-    pending_key, category = value.rsplit("|", 1)
-    channel_id = body.get("channel", {}).get("id")
-    message_ts = body.get("message", {}).get("ts")
-    process_inquiry_with_category(pending_key, "finance", say, client, channel_id, message_ts)
+    process_inquiry_with_category(body, client)
 
 @app.action("category_other")
 def handle_category_other(ack, body, client, say):
     ack()
-    value = body.get("actions", [{}])[0].get("value", "")
-    pending_key, category = value.rsplit("|", 1)
-    channel_id = body.get("channel", {}).get("id")
-    message_ts = body.get("message", {}).get("ts")
-    process_inquiry_with_category(pending_key, "other", say, client, channel_id, message_ts)
+    process_inquiry_with_category(body, client)
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")

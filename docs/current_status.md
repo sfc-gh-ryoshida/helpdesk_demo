@@ -1,6 +1,6 @@
 # スマート社内ヘルプデスク 現在の環境状況
 
-最終更新: 2026/03/05
+最終更新: 2026/03/06
 
 ---
 
@@ -46,25 +46,26 @@
 ### 1. n8n ワークフロー
 
 - [x] Slack Webhookトリガー
-- [x] LLM解析（Claude）
-- [x] チケット自動作成
-- [x] Slackへの自動返信
+- [x] Cortex Agent連携（IT/Finance/HR/General 4エージェント）
+- [x] チケット自動作成（重複チェック付き）
+- [x] Slackへの自動返信（AI回答 + フィードバックボタン）
 - [x] 高緊急度アラート
 - [x] ログテーブルへの保存
+- [x] 評価ハンドラー（解決/有人対応/エスカレーション）
 - [ ] MCP Server連携（未実装）
-- [ ] Cortex Agent連携（未実装）
 
 ### 2. PostgreSQLテーブル
 
 | テーブル | スキーマ | 説明 | 状態 |
 |----------|----------|------|:----:|
-| `helpdesk_tickets` | app | チケット管理 | ✅ |
+| `helpdesk_tickets` | app | IT/一般チケット管理 (TKT-/IT-/GEN-) | ✅ |
+| `finance_tickets` | app | 経理チケット管理 (FIN-) | ✅ |
+| `hr_tickets` | app | 人事チケット管理 (HR-) | ✅ |
 | `helpdesk_logs` | app | 会話ログ | ✅ |
+| `ticket_history` | app | チケット変更履歴 | ✅ |
+| `ticket_comments` | app | チケットコメント | ✅ |
 | `escalation_log` | app | エスカレーション記録 | ✅ |
 | `ai_response_log` | app | AI応答ログ | ✅ |
-| `ticket_actions` | app | 操作履歴 | ⬜ 未作成 |
-| `employee_master` | app | 従業員マスター | ⬜ 未作成 |
-| `asset_master` | app | 資産マスター | ⬜ 未作成 |
 
 ### 3. Ticket App (Next.js)
 
@@ -95,14 +96,14 @@
 | PostgreSQLチケット管理 | ✅ | 基本テーブル作成済み |
 | Ticket App | ✅ | 基本機能完了 |
 
-### Phase 2（拡張機能）- 未着手
+### Phase 2（拡張機能）
 
 | 機能 | 状態 | 備考 |
 |------|:----:|------|
+| Cortex Search Service | ✅ | KNOWLEDGE/ASSET/FINANCE/HR 4サービス |
+| Cortex Agent | ✅ | HELPDESK/FINANCE/HR 3エージェント |
+| AWS Lambda (Slack Bot) | ✅ | カテゴリ選択→n8nルーティング |
 | pg_lake + Iceberg連携 | ⬜ | S3設定必要 |
-| Snowflake Iceberg Table | ⬜ | External Volume必要 |
-| Cortex Search Service | ⬜ | 資産マスター連携 |
-| Cortex Agent | ⬜ | FAQ自動回答 |
 | MCP Server | ⬜ | n8n連携 |
 | Streamlit Dashboard | ⬜ | 統計可視化 |
 
@@ -117,16 +118,16 @@
 | 2026/03/02 | `ticket_actions`テーブルへのINSERTを削除 | `app/api/tickets/[id]/route.ts` |
 | 2026/03/05 | マルチカテゴリ対応（IT/人事/経理） | `app/hr/`, `app/finance/`, `components/Sidebar.tsx` |
 | 2026/03/05 | Node.jsバージョン問題解決（v16→v22） | 開発環境設定 |
+| 2026/03/06 | Lambda stateless修正（ボタンvalue埋め込み方式） | `slack_app.py` |
+| 2026/03/06 | n8nワークフロー修正（Postgres 0行問題、ノード位置重複） | `n8n_workflows/*.json` |
 
 ---
 
 ## 既知の課題
 
-1. **`ticket_actions`テーブル未作成**: 操作履歴を記録したい場合は作成が必要
-2. **マスターデータ未整備**: `employee_master`, `asset_master`が未作成
-3. **認証未実装**: Ticket Appに認証機能がない
-4. **pg_lake未設定**: S3/IAM設定が必要
-5. **HR/Financeテーブルが空**: テストデータ投入が必要
+1. **認証未実装**: Ticket Appに認証機能がない
+2. **pg_lake未設定**: S3/IAM設定が必要
+3. **MCP Server未連携**: Cortex Agentは直接呼び出し（MCP経由ではない）
 
 ---
 
@@ -198,23 +199,27 @@ PGPASSWORD='<password>' psql -h fjf7gro575djnc7hampgj7jqam.sfseapac-fsi-japan.us
 ```
 smart_helpdesk/
 ├── docs/
-│   ├── current_status.md      ← このファイル（現在の状況）
-│   ├── deployment_guide.md    ← デプロイ手順書（詳細）
-│   ├── demo_script.md         ← デモ手順書
-│   └── slack_webhook_setup.md ← Slack連携設定ガイド
+│   ├── current_status.md           ← このファイル（現在の状況）
+│   ├── application_design.md       ← アプリケーション設計書
+│   ├── database_design.md          ← データベース設計書
+│   ├── deployment_guide.md         ← デプロイ手順書（詳細）
+│   ├── demo_script.md              ← デモ手順書
+│   └── slack_webhook_setup.md      ← Slack連携設定ガイド
 ├── setup/
-│   ├── 01_postgres_setup.sql     ← PostgreSQLテーブル定義
-│   ├── 02_snowflake_setup.sql    ← Snowflakeリソース設定
-│   ├── 03_knowledge_base_setup.sql ← ナレッジベース設定
-│   ├── 04_demo_data.sql          ← デモ用サンプルデータ
-│   └── 05_spcs_deploy.sql        ← SPCSデプロイ用SQL
-├── n8n/
-│   ├── n8n_spec.yaml             ← n8n SPCSサービス定義
-│   └── n8n_workflow.json         ← n8nワークフロー定義
+│   ├── 01_snowflake_base.sql       ← Snowflake基盤設定
+│   └── ...                         ← その他セットアップSQL
+├── n8n_workflows/
+│   ├── IT_Helpdesk_Agent.json      ← IT Agent ワークフロー
+│   ├── Finance_Helpdesk_Agent.json ← Finance Agent ワークフロー
+│   ├── HR_Helpdesk_Agent.json      ← HR Agent ワークフロー
+│   ├── General_Helpdesk_Agent.json ← General Agent ワークフロー
+│   └── Helpdesk_Evaluation_Handler.json ← 評価ハンドラー
+├── slack_app.py                    ← Lambda関数ソース
+├── package/                        ← Lambda依存ライブラリ
 └── ticket-app/
-    ├── app/                      ← Next.js App Router
-    ├── components/               ← Reactコンポーネント
-    ├── lib/                      ← ユーティリティ
-    ├── Dockerfile                ← Dockerビルド定義
-    └── ticket_app_spec.yaml      ← Ticket App SPCSサービス定義
+    ├── app/                        ← Next.js App Router
+    ├── components/                 ← Reactコンポーネント
+    ├── lib/                        ← ユーティリティ
+    ├── Dockerfile                  ← Dockerビルド定義
+    └── ticket_app_spec.yaml        ← Ticket App SPCSサービス定義
 ```

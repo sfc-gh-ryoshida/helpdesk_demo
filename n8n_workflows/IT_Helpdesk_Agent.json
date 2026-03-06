@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1100, -200],
+      "position": [
+        -1100,
+        -200
+      ],
       "webhookId": "helpdesk"
     },
     {
@@ -25,7 +28,10 @@
       "name": "Respond to Slack",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-900, -200]
+      "position": [
+        -900,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -37,8 +43,16 @@
       "name": "Log Inquiry",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [-700, -200],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        -700,
+        -200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
@@ -48,13 +62,31 @@
       "name": "Check Skip Agent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-500, -200]
+      "position": [
+        -500,
+        -200
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [{ "id": "skip", "leftValue": "={{ $json.skipAgent }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "skip",
+              "leftValue": "={{ $json.skipAgent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "or"
         },
         "options": {}
@@ -63,7 +95,10 @@
       "name": "Skip Agent?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-300, -200]
+      "position": [
+        -300,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -75,15 +110,34 @@
       "name": "Update Log (Skip)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [-100, -350],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        -100,
+        -350
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-2400545611-10611758284900-nNdmizMx2nekltBAqXiAnQsT" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer xoxb-2400545611-10611758284900-nNdmizMx2nekltBAqXiAnQsT"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"channel\": \"{{ $('Webhook').first().json.body.channel_id }}\", \"thread_ts\": \"{{ $('Webhook').first().json.body.thread_ts }}\", \"text\": \"{{ $('Check Skip Agent').first().json.responseText }}\" }",
@@ -93,7 +147,10 @@
       "name": "Slack - Skip Response",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [100, -350]
+      "position": [
+        100,
+        -350
+      ]
     },
     {
       "parameters": {
@@ -105,8 +162,16 @@
       "name": "Fetch Conversation History",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [-100, -100],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        -100,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
@@ -116,7 +181,10 @@
       "name": "Build Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [100, -100]
+      "position": [
+        100,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -127,8 +195,16 @@
       "name": "Call Cortex Agent",
       "type": "n8n-nodes-base.snowflake",
       "typeVersion": 1,
-      "position": [300, -100],
-      "credentials": { "snowflake": { "id": "y23VaUVNHhdumfkZ", "name": "Snowflake account" } }
+      "position": [
+        300,
+        -100
+      ],
+      "credentials": {
+        "snowflake": {
+          "id": "y23VaUVNHhdumfkZ",
+          "name": "Snowflake account"
+        }
+      }
     },
     {
       "parameters": {
@@ -138,7 +214,10 @@
       "name": "Parse Agent Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, -100]
+      "position": [
+        500,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -150,55 +229,300 @@
       "name": "Log AI Response",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, -100],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        700,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO app.helpdesk_tickets (ticket_id, reporter_name, issue_type, urgency, summary, source_channel, status, thread_ts, log_id, created_at)\nVALUES ('IT-' || TO_CHAR(NOW(), 'YYYYMMDD-HH24MISS'), '{{ $('Parse Agent Response').first().json.user_id }}', '{{ $('Parse Agent Response').first().json.category }}', '{{ $('Parse Agent Response').first().json.priority }}', '{{ ($('Parse Agent Response').first().json.summary || \"\").replace(/'/g, \"''\") }}', 'slack', 'OPEN', '{{ $('Parse Agent Response').first().json.thread_ts }}', {{ $json.id }}, NOW())\nRETURNING ticket_id",
+        "query": "SELECT COALESCE((SELECT ticket_id FROM app.helpdesk_tickets WHERE thread_ts = '{{ $('Parse Agent Response').first().json.thread_ts }}' AND thread_ts != '' AND ticket_id LIKE 'IT-%' LIMIT 1), '') as ticket_id",
+        "options": {}
+      },
+      "id": "check-existing-ticket",
+      "name": "Check Existing Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-ticket",
+              "leftValue": "={{ $json.ticket_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-ticket-exists",
+      "name": "Ticket Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO app.helpdesk_tickets (ticket_id, reporter_name, issue_type, urgency, summary, source_channel, status, thread_ts, log_id, created_at)\nVALUES ('IT-' || TO_CHAR(NOW(), 'YYYYMMDD-HH24MISS'), '{{ $('Parse Agent Response').first().json.user_id }}', '{{ $('Parse Agent Response').first().json.category }}', '{{ $('Parse Agent Response').first().json.priority }}', '{{ ($('Parse Agent Response').first().json.summary || \"\").replace(/'/g, \"''\") }}', 'slack', 'OPEN', '{{ $('Parse Agent Response').first().json.thread_ts }}', {{ $('Log AI Response').first().json.id }}, NOW())\nRETURNING ticket_id",
         "options": {}
       },
       "id": "create-ticket",
       "name": "Create IT Ticket",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [900, -100],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        1300,
+        -300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-2400545611-10611758284900-nNdmizMx2nekltBAqXiAnQsT" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer xoxb-2400545611-10611758284900-nNdmizMx2nekltBAqXiAnQsT"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ (function() {\n  const turnNumber = $('Parse Agent Response').first().json.turn_number || 1;\n  const isFirstTurn = turnNumber === 1;\n  let aiText = ($('Parse Agent Response').first().json.ai_response_text || '').substring(0, 2900);\n  aiText = aiText.replace(/\\\\n/g, '\\n').replace(/\\\"/g, '\"');\n  const logId = $('Log AI Response').first().json.id;\n  const ticketId = $json.ticket_id;\n  const category = $('Parse Agent Response').first().json.category;\n  const priority = $('Parse Agent Response').first().json.priority;\n  const channelId = $('Parse Agent Response').first().json.channel_id;\n  const threadTs = $('Parse Agent Response').first().json.thread_ts;\n\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: ':robot_face: *IT AI回答*' } },\n    { type: 'section', text: { type: 'mrkdwn', text: aiText } },\n    { type: 'divider' },\n    { type: 'context', elements: [{ type: 'mrkdwn', text: ':ticket: チケット: `' + ticketId + '` | :label: ' + category + ' | :zap: ' + priority }] },\n    { type: 'section', text: { type: 'mrkdwn', text: 'この回答は役に立ちましたか？' } }\n  ];\n\n  const actionElements = [\n    { type: 'button', text: { type: 'plain_text', text: '✅ 解決しました' }, style: 'primary', action_id: 'resolved', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'it' }) }\n  ];\n  if (isFirstTurn) {\n    actionElements.push({ type: 'button', text: { type: 'plain_text', text: '🚨 エスカレーション' }, style: 'danger', action_id: 'escalate', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'it' }) });\n  }\n  blocks.push({ type: 'actions', block_id: 'it_feedback_' + logId, elements: actionElements });\n\n  return JSON.stringify({ channel: channelId, thread_ts: threadTs, text: 'AI回答', blocks: blocks });\n})() }}",
+        "jsonBody": "={{ (function() {\n  let aiText = ($('Parse Agent Response').first().json.ai_response_text || '').substring(0, 2900);\n  aiText = aiText.replace(/\\\\n/g, '\\n').replace(/\\\"/g, '\"');\n  const logId = $('Log AI Response').first().json.id;\n  const existingTicketId = $('Check Existing Ticket').first().json.ticket_id;\n  let newTicketId = null; try { newTicketId = !existingTicketId ? $('Create IT Ticket').first().json.ticket_id : null; } catch(e) { newTicketId = null; }\n  const ticketId = existingTicketId || newTicketId;\n  const category = $('Parse Agent Response').first().json.category;\n  const priority = $('Parse Agent Response').first().json.priority;\n  const channelId = $('Parse Agent Response').first().json.channel_id;\n  const threadTs = $('Parse Agent Response').first().json.thread_ts;\n\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: ':robot_face: *IT AI回答*' } },\n    { type: 'section', text: { type: 'mrkdwn', text: aiText } },\n    { type: 'divider' },\n    { type: 'context', elements: [{ type: 'mrkdwn', text: ':ticket: チケット: `' + ticketId + '` | :label: ' + category + ' | :zap: ' + priority }] },\n    { type: 'section', text: { type: 'mrkdwn', text: 'この回答は役に立ちましたか？' } }\n  ];\n\n  const actionElements = [\n    { type: 'button', text: { type: 'plain_text', text: '✅ 解決しました' }, style: 'primary', action_id: 'resolved', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'it' }) },\n    { type: 'button', text: { type: 'plain_text', text: '📝 有人対応依頼' }, action_id: 'direct_ticket', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'it' }) },\n    { type: 'button', text: { type: 'plain_text', text: '🚨 緊急エスカレーション' }, style: 'danger', action_id: 'escalate', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'it' }) }\n  ];\n  blocks.push({ type: 'actions', block_id: 'it_feedback_' + logId, elements: actionElements });\n\n  return JSON.stringify({ channel: channelId, thread_ts: threadTs, text: 'AI回答', blocks: blocks });\n})() }}",
         "options": {}
       },
       "id": "slack-response",
       "name": "Slack - AI Response",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, -100]
+      "position": [
+        1500,
+        -100
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Respond to Slack", "type": "main", "index": 0 }]] },
-    "Respond to Slack": { "main": [[{ "node": "Log Inquiry", "type": "main", "index": 0 }]] },
-    "Log Inquiry": { "main": [[{ "node": "Check Skip Agent", "type": "main", "index": 0 }]] },
-    "Check Skip Agent": { "main": [[{ "node": "Skip Agent?", "type": "main", "index": 0 }]] },
-    "Skip Agent?": { "main": [[{ "node": "Update Log (Skip)", "type": "main", "index": 0 }], [{ "node": "Fetch Conversation History", "type": "main", "index": 0 }]] },
-    "Update Log (Skip)": { "main": [[{ "node": "Slack - Skip Response", "type": "main", "index": 0 }]] },
-    "Fetch Conversation History": { "main": [[{ "node": "Build Messages", "type": "main", "index": 0 }]] },
-    "Build Messages": { "main": [[{ "node": "Call Cortex Agent", "type": "main", "index": 0 }]] },
-    "Call Cortex Agent": { "main": [[{ "node": "Parse Agent Response", "type": "main", "index": 0 }]] },
-    "Parse Agent Response": { "main": [[{ "node": "Log AI Response", "type": "main", "index": 0 }]] },
-    "Log AI Response": { "main": [[{ "node": "Create IT Ticket", "type": "main", "index": 0 }]] },
-    "Create IT Ticket": { "main": [[{ "node": "Slack - AI Response", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Slack": {
+      "main": [
+        [
+          {
+            "node": "Log Inquiry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Inquiry": {
+      "main": [
+        [
+          {
+            "node": "Check Skip Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Skip Agent": {
+      "main": [
+        [
+          {
+            "node": "Skip Agent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Agent?": {
+      "main": [
+        [
+          {
+            "node": "Update Log (Skip)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Conversation History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Log (Skip)": {
+      "main": [
+        [
+          {
+            "node": "Slack - Skip Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Build Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Messages": {
+      "main": [
+        [
+          {
+            "node": "Call Cortex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Cortex Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Agent Response": {
+      "main": [
+        [
+          {
+            "node": "Log AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log AI Response": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Ticket": {
+      "main": [
+        [
+          {
+            "node": "Ticket Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Exists?": {
+      "main": [
+        [
+          {
+            "node": "Slack - AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create IT Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IT Ticket": {
+      "main": [
+        [
+          {
+            "node": "Slack - AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "meta": { "templateCredsSetupCompleted": true }
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
 }

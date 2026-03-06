@@ -9,6 +9,7 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  UserCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,6 +124,8 @@ export default function Home() {
     switch (status) {
       case "OPEN":
         return <AlertCircle className="w-4 h-4 text-blue-500" />;
+      case "HUMAN_REQUESTED":
+        return <UserCircle className="w-4 h-4 text-yellow-500" />;
       case "IN_PROGRESS":
         return <Clock className="w-4 h-4 text-yellow-500" />;
       case "RESOLVED":
@@ -147,11 +150,11 @@ export default function Home() {
   };
 
   const activeTickets = tickets.filter(
-    (t) => t.status === "OPEN" || t.status === "IN_PROGRESS"
+    (t) => t.status === "OPEN" || t.status === "IN_PROGRESS" || t.status === "HUMAN_REQUESTED"
   );
   const stats = {
     total: totalCount || tickets.length,
-    open: activeTickets.filter((t) => t.status === "OPEN").length,
+    open: activeTickets.filter((t) => t.status === "OPEN" || t.status === "HUMAN_REQUESTED").length,
     inProgress: activeTickets.filter((t) => t.status === "IN_PROGRESS").length,
     highUrgency: activeTickets.filter((t) => t.urgency === "HIGH").length,
   };
@@ -243,6 +246,7 @@ export default function Home() {
                     <SelectItem value="RESOLVED">RESOLVED</SelectItem>
                     <SelectItem value="CLOSED">CLOSED</SelectItem>
                     <SelectItem value="ESCALATED">ESCALATED</SelectItem>
+                    <SelectItem value="HUMAN_REQUESTED">HUMAN_REQUESTED</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
@@ -332,7 +336,7 @@ export default function Home() {
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             {getStatusIcon(ticket.status)}
-                            <span className="text-sm">{ticket.status}</span>
+                            <span className="text-sm">{ticket.status === "HUMAN_REQUESTED" ? "OPEN" : ticket.status}</span>
                           </div>
                         </TableCell>
                         <TableCell>
