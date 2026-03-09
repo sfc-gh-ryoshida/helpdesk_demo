@@ -177,9 +177,11 @@ CREATE STREAMLIT HELPDESK_DB.APP.HELPDESK_DASHBOARD
 1. **コスト効率**: Hybrid Tableと比較して大幅なコスト削減
 2. **PostgreSQLエコシステム**: 既存ツール（pgAdmin、DBeaver等）がそのまま使える
 3. **アプリケーションDB**: 将来のチケット管理GUIのバックエンドとして最適
-4. **pg_lake連携**: ネイティブにIceberg形式で出力可能
+4. **pg_lake連携**: ネイティブにIceberg形式で出力可能（未実装・将来拡張余地）
 
-### pg_lakeのメリット
+### pg_lakeのメリット（未実装・将来拡張余地）
+
+> **注**: 以下は pg_lake が利用可能になった際の想定であり、現時点では未実装です。
 
 1. **シンプル**: `USING iceberg`だけでIcebergテーブル作成
 2. **リアルタイム性**: pg_cronで数分単位の同期が可能
@@ -195,7 +197,7 @@ CREATE STREAMLIT HELPDESK_DB.APP.HELPDESK_DASHBOARD
 
 ## トラブルシューティング
 
-### pg_lakeでエラーが出る場合
+### pg_lakeでエラーが出る場合（未実装・将来拡張用参考情報）
 ```sql
 -- S3パーミッション確認
 SELECT pg_lake_iceberg.check_s3_access('s3://helpdesk-iceberg-bucket/');

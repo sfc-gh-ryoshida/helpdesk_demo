@@ -12,7 +12,10 @@
       "name": "Webhook - Evaluation",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-600, 0],
+      "position": [
+        -600,
+        0
+      ],
       "webhookId": "helpdesk-evaluation"
     },
     {
@@ -25,7 +28,10 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-400, 0]
+      "position": [
+        -400,
+        0
+      ]
     },
     {
       "parameters": {
@@ -35,7 +41,10 @@
       "name": "Parse Value",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-200, 0]
+      "position": [
+        -200,
+        0
+      ]
     },
     {
       "parameters": {
@@ -47,14 +56,37 @@
       "name": "Log Evaluation",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [0, 0],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [{ "id": "is-direct-ticket", "leftValue": "={{ $('Parse Value').first().json.evaluation }}", "rightValue": "direct_ticket", "operator": { "type": "string", "operation": "equals" } }],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-direct-ticket",
+              "leftValue": "={{ $('Parse Value').first().json.evaluation }}",
+              "rightValue": "direct_ticket",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "or"
         },
         "options": {}
@@ -63,7 +95,10 @@
       "name": "Direct Ticket?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [200, 0]
+      "position": [
+        200,
+        0
+      ]
     },
     {
       "parameters": {
@@ -73,7 +108,10 @@
       "name": "Get Table Name (Direct)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, -200]
+      "position": [
+        400,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -85,31 +123,72 @@
       "name": "Update Status (Direct)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [600, -200],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        600,
+        -200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":pencil: *有人対応依頼*\\n\\nチケット `{{ $('Parse Value').first().json.ticket_id }}` を有人対応として登録しました。\\n担当者が確認次第、ご連絡いたします。\"\n}",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi"
       },
       "id": "slack-direct",
       "name": "Slack - Direct Ticket",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, -200]
+      "position": [
+        800,
+        -200
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [{ "id": "is-escalate", "leftValue": "={{ $('Parse Value').first().json.evaluation }}", "rightValue": "escalate", "operator": { "type": "string", "operation": "equals" } }],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-escalate",
+              "leftValue": "={{ $('Parse Value').first().json.evaluation }}",
+              "rightValue": "escalate",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "or"
         },
         "options": {}
@@ -118,7 +197,10 @@
       "name": "Escalate?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [400, 100]
+      "position": [
+        400,
+        100
+      ]
     },
     {
       "parameters": {
@@ -128,7 +210,10 @@
       "name": "Get Table Name",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 0]
+      "position": [
+        600,
+        0
+      ]
     },
     {
       "parameters": {
@@ -140,25 +225,51 @@
       "name": "Update Status (Escalate)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [800, 0],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":rotating_light: *エスカレーション*\\n\\nチケット `{{ $('Parse Value').first().json.ticket_id }}` を担当者にエスカレーションしました。\\n折り返しご連絡いたします。\"\n}",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi"
       },
       "id": "slack-escalate",
       "name": "Slack - Escalation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 0]
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
     },
     {
       "parameters": {
@@ -168,7 +279,10 @@
       "name": "Get Table Name (Resolved)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 200]
+      "position": [
+        600,
+        200
+      ]
     },
     {
       "parameters": {
@@ -180,42 +294,206 @@
       "name": "Update Status (Resolved)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [800, 200],
-      "credentials": { "postgres": { "id": "QtnUrn5MgHNRa1Vo", "name": "Postgres account" } }
+      "position": [
+        800,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QtnUrn5MgHNRa1Vo",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://slack.com/api/chat.postMessage",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer xoxb-xxxx-xxxx-xxxx" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"channel\": \"{{ $('Parse Value').first().json.channel_id }}\",\n  \"thread_ts\": \"{{ $('Parse Value').first().json.thread_ts }}\",\n  \"text\": \":white_check_mark: 解決済みとして記録しました。ご利用ありがとうございました！\"\n}",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi"
       },
       "id": "slack-resolved",
       "name": "Slack - Resolved",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 200]
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook - Evaluation": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
-    "Respond": { "main": [[{ "node": "Parse Value", "type": "main", "index": 0 }]] },
-    "Parse Value": { "main": [[{ "node": "Log Evaluation", "type": "main", "index": 0 }]] },
-    "Log Evaluation": { "main": [[{ "node": "Direct Ticket?", "type": "main", "index": 0 }]] },
-    "Direct Ticket?": { "main": [[{ "node": "Get Table Name (Direct)", "type": "main", "index": 0 }], [{ "node": "Escalate?", "type": "main", "index": 0 }]] },
-    "Get Table Name (Direct)": { "main": [[{ "node": "Update Status (Direct)", "type": "main", "index": 0 }]] },
-    "Update Status (Direct)": { "main": [[{ "node": "Slack - Direct Ticket", "type": "main", "index": 0 }]] },
-    "Escalate?": { "main": [[{ "node": "Get Table Name", "type": "main", "index": 0 }], [{ "node": "Get Table Name (Resolved)", "type": "main", "index": 0 }]] },
-    "Get Table Name": { "main": [[{ "node": "Update Status (Escalate)", "type": "main", "index": 0 }]] },
-    "Update Status (Escalate)": { "main": [[{ "node": "Slack - Escalation", "type": "main", "index": 0 }]] },
-    "Get Table Name (Resolved)": { "main": [[{ "node": "Update Status (Resolved)", "type": "main", "index": 0 }]] },
-    "Update Status (Resolved)": { "main": [[{ "node": "Slack - Resolved", "type": "main", "index": 0 }]] }
+    "Webhook - Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond": {
+      "main": [
+        [
+          {
+            "node": "Parse Value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Value": {
+      "main": [
+        [
+          {
+            "node": "Log Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Direct Ticket?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Direct Ticket?": {
+      "main": [
+        [
+          {
+            "node": "Get Table Name (Direct)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Name (Direct)": {
+      "main": [
+        [
+          {
+            "node": "Update Status (Direct)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status (Direct)": {
+      "main": [
+        [
+          {
+            "node": "Slack - Direct Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate?": {
+      "main": [
+        [
+          {
+            "node": "Get Table Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Table Name (Resolved)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Name": {
+      "main": [
+        [
+          {
+            "node": "Update Status (Escalate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status (Escalate)": {
+      "main": [
+        [
+          {
+            "node": "Slack - Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Name (Resolved)": {
+      "main": [
+        [
+          {
+            "node": "Update Status (Resolved)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status (Resolved)": {
+      "main": [
+        [
+          {
+            "node": "Slack - Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "meta": { "templateCredsSetupCompleted": true }
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
 }

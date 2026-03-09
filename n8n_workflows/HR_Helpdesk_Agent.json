@@ -129,10 +129,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "Bearer xoxb-xxxx-xxxx-xxxx"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             }
@@ -141,7 +137,9 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"channel\": \"{{ $('Webhook').first().json.body.channel_id }}\", \"thread_ts\": \"{{ $('Webhook').first().json.body.thread_ts }}\", \"text\": \"{{ $('Check Skip Agent').first().json.responseText }}\" }",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi"
       },
       "id": "slack-skip-response-001",
       "name": "Slack - Skip Response",
@@ -150,7 +148,13 @@
       "position": [
         100,
         -350
-      ]
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
     },
     {
       "parameters": {
@@ -324,10 +328,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "Bearer xoxb-xxxx-xxxx-xxxx"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             }
@@ -336,7 +336,9 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ (function() {\n  let aiText = ($('Parse Agent Response').first().json.ai_response_text || '').substring(0, 2900);\n  aiText = aiText.replace(/\\\\n/g, '\\n').replace(/\\\"/g, '\"');\n  const logId = $('Log AI Response').first().json.id;\n  const existingTicketId = $('Check Existing Ticket').first().json.ticket_id;\n  let newTicketId = null; try { newTicketId = !existingTicketId ? $('Create HR Ticket').first().json.ticket_id : null; } catch(e) { newTicketId = null; }\n  const ticketId = existingTicketId || newTicketId;\n  const category = $('Parse Agent Response').first().json.category;\n  const priority = $('Parse Agent Response').first().json.priority;\n  const channelId = $('Parse Agent Response').first().json.channel_id;\n  const threadTs = $('Parse Agent Response').first().json.thread_ts;\n\n  const blocks = [\n    { type: 'section', text: { type: 'mrkdwn', text: ':bust_in_silhouette: *人事AI回答*' } },\n    { type: 'section', text: { type: 'mrkdwn', text: aiText } },\n    { type: 'divider' },\n    { type: 'context', elements: [{ type: 'mrkdwn', text: ':ticket: チケット: `' + ticketId + '` | :label: ' + category + ' | :zap: ' + priority }] },\n    { type: 'section', text: { type: 'mrkdwn', text: 'この回答は役に立ちましたか？' } }\n  ];\n\n  const actionElements = [\n    { type: 'button', text: { type: 'plain_text', text: '✅ 解決しました' }, style: 'primary', action_id: 'resolved', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'hr' }) },\n    { type: 'button', text: { type: 'plain_text', text: '📝 有人対応依頼' }, action_id: 'direct_ticket', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'hr' }) },\n    { type: 'button', text: { type: 'plain_text', text: '🚨 緊急エスカレーション' }, style: 'danger', action_id: 'escalate', value: JSON.stringify({ log_id: logId, ticket_id: ticketId, category: 'hr' }) }\n  ];\n  blocks.push({ type: 'actions', block_id: 'hr_feedback_' + logId, elements: actionElements });\n\n  return JSON.stringify({ channel: channelId, thread_ts: threadTs, text: 'AI回答', blocks: blocks });\n})() }}",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi"
       },
       "id": "slack-ai-response",
       "name": "Slack - AI Response",
@@ -345,7 +347,13 @@
       "position": [
         1500,
         -100
-      ]
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
     }
   ],
   "connections": {

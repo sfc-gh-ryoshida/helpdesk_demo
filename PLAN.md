@@ -555,6 +555,11 @@ ALTER SERVICE HELPDESK_DB.SPCS.N8N_SVC RESUME;
 
 ## Phase 4: pg_lake → S3 → Iceberg Table 連携
 
+> **⚠️ 未実装 — 将来的な拡張余地として記載**
+>
+> 本フェーズ（Phase 4〜5）は現時点で未実装です。pg_lake は Snowflake Postgres の拡張機能として将来利用可能になった際に、PostgreSQL から直接 Iceberg 形式で S3 に書き出し、Snowflake 側で参照する連携パイプラインを構築する構想です。
+> 現在のシステムでは PostgreSQL に直接接続してデータを取得しています。
+
 ### アーキテクチャ
 
 ```
@@ -683,6 +688,8 @@ SELECT * FROM cron.job;
 ---
 
 ## Phase 5: Snowflake側 Iceberg Table設定
+
+> **⚠️ 未実装 — Phase 4（pg_lake）と合わせて将来的な拡張余地として記載**
 
 ### 5.1 External Volume作成
 
@@ -834,7 +841,7 @@ st.dataframe(tickets_df, use_container_width=True)
 | 3 | 1:00 | n8n | **MCP Client → Cortex Agent** 呼び出し確認 | **MCP Server統合** |
 | 4 | 1:30 | n8n | PostgreSQLノードで **Snowflake Postgres** にINSERT | **Snowflake Postgres訴求** |
 | 5 | 2:00 | Slack | 自動返信「代替機を手配しました」 | 即時レスポンス |
-| 6 | 2:30 | psql | pg_lakeでIceberg書き出し確認 | **pg_lake + Iceberg** |
+| 6 | 2:30 | psql | pg_lakeでIceberg書き出し確認 | **pg_lake + Iceberg**（未実装・将来拡張） |
 | 7 | 3:30 | **Streamlit** | Iceberg Tableからデータ表示 | **Postgres→S3→Snowflake連携** |
 | 8 | 4:30 | 全体 | アーキテクチャ図で振り返り | **Snowflake統合基盤** |
 
@@ -845,7 +852,7 @@ st.dataframe(tickets_df, use_container_width=True)
 | 機能 | 訴求内容 |
 |------|---------|
 | **Snowflake Postgres** | PostgreSQL完全互換・マネージド・将来のアプリDBとして最適 |
-| **pg_lake** | Postgres内でIceberg形式でS3に直接書き出し |
+| **pg_lake** | Postgres内でIceberg形式でS3に直接書き出し（未実装・将来拡張余地） |
 | **Iceberg Table** | S3上のIcebergデータをSnowflakeからネイティブ参照 |
 | **Snowflake MCP Server** | 標準プロトコルでCortex AIと外部ツールを統合 |
 | **Cortex Agent** | LLM + Search を一括処理・ツール呼び出し自動化 |
@@ -872,7 +879,7 @@ st.dataframe(tickets_df, use_container_width=True)
 ## 備考
 
 - **Snowflake Postgres**: PostgreSQL 16-18互換、PgBouncer内蔵で高並行性対応
-- **pg_lake**: Postgres拡張でIceberg形式をS3に直接書き出し（pg_cronで定期実行）
+- **pg_lake**: Postgres拡張でIceberg形式をS3に直接書き出し（pg_cronで定期実行）— **未実装：将来的な拡張余地**
 - **Iceberg Table**: Snowflakeからオープンフォーマットでデータ参照（ベンダーロックイン回避）
 - **認証**: MCP ServerはOAuth 2.0、PostgresはToken Auth推奨
 - **コスト**: Snowflake Postgresはインスタンス課金（SMALL〜XLARGE）、Iceberg Tableはストレージ+クエリ課金
@@ -926,6 +933,6 @@ st.dataframe(tickets_df, use_container_width=True)
 ### 今後の課題
 
 - [ ] `ticket_actions`テーブル作成（操作履歴記録用）
-- [ ] pg_lake + Iceberg連携
+- [ ] pg_lake + Iceberg連携（将来的な拡張余地。現時点では未実装）
 - [ ] Streamlitダッシュボード作成
 - [ ] Cortex Agent/MCP Server統合

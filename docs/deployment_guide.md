@@ -18,7 +18,9 @@
 以下はSnowflake外で事前に準備が必要なリソースです。  
 **各ファイル内のプレースホルダーを実際の値に置き換えてください。**
 
-### 1. AWS S3（Iceberg用）- 任意
+### 1. AWS S3（Iceberg用）- 任意（未実装・将来拡張余地）
+
+> **注**: pg_lake + Iceberg 連携は現時点で未実装です。将来的な拡張として計画しています。
 
 | 項目 | プレースホルダー | 説明 |
 |------|------------------|------|
@@ -107,7 +109,7 @@ openssl rand -hex 32
 - [ ] Postgres管理者パスワードを決定
 - [ ] n8n暗号化キー・JWTシークレットを生成
 
-### Iceberg連携する場合
+### Iceberg連携する場合（未実装・将来拡張余地）
 - [ ] AWS S3バケット作成済み
 - [ ] IAMロール作成・設定済み
 - [ ] バケット名・ARNをファイルに反映済み
@@ -220,11 +222,11 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA app TO n8n_user;
 
 ---
 
-## Step 3: External Volume & Iceberg（任意）
+## Step 3: External Volume & Iceberg（任意・未実装・将来拡張余地）
 
 > **実行ファイル: `setup/03_iceberg_setup.sql`**
 >
-> pg_lakeとIcebergを使う場合のみ実行
+> pg_lakeとIcebergを使う場合のみ実行。**現時点では未実装であり、将来的な拡張余地として記載しています。**
 
 ### 3.1 事前準備
 

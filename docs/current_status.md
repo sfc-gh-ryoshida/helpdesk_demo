@@ -103,7 +103,7 @@
 | Cortex Search Service | ✅ | KNOWLEDGE/ASSET/FINANCE/HR 4サービス |
 | Cortex Agent | ✅ | HELPDESK/FINANCE/HR 3エージェント |
 | AWS Lambda (Slack Bot) | ✅ | カテゴリ選択→n8nルーティング |
-| pg_lake + Iceberg連携 | ⬜ | S3設定必要 |
+| pg_lake + Iceberg連携 | ⬜ | **未実装・将来的な拡張余地**。pg_lakeが利用可能になった際にPostgres→S3→Snowflake Icebergパイプラインを構築予定 |
 | MCP Server | ⬜ | n8n連携 |
 | Streamlit Dashboard | ⬜ | 統計可視化 |
 
@@ -126,7 +126,7 @@
 ## 既知の課題
 
 1. **認証未実装**: Ticket Appに認証機能がない
-2. **pg_lake未設定**: S3/IAM設定が必要
+2. **pg_lake未実装**: pg_lakeは将来的な拡張余地として計画段階。現時点ではPostgreSQLに直接接続してデータを取得
 3. **MCP Server未連携**: Cortex Agentは直接呼び出し（MCP経由ではない）
 
 ---
